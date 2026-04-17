@@ -45,6 +45,17 @@ class OEISExplorer
     @instance = @sequences[key].new
     @terms = @instance.generate(@num_terms)
     @user_transformed = false # Reset view for new sequence
+    
+    # Load Documentation
+    doc_path = File.join(__dir__, '..', '..', 'docs', 'sequences', "#{key}.md")
+    if File.exist?(doc_path)
+      # Strip the Doc Version header for the UI
+      content = File.read(doc_path).lines.reject { |l| l.start_with?("Doc Version:") }.join.strip
+      @doc_display.text = content if @doc_display
+    else
+      @doc_display.text = "No documentation found for #{key}.\nRun 'ruby oeis_cli.rb build-catalog' to generate it." if @doc_display
+    end
+
     @area.queue_redraw_all if @area
   end
 
@@ -110,15 +121,11 @@ class OEISExplorer
             }
           }
 
-          group('Sequence Info') {
+          group('Documentation & Analysis') {
             vertical_box {
-              @name_label = label("Name: #{@instance.name}")
-              @rank_label = label("Rank: #{@instance.rank}")
-              @formula_label = label("Formula: #{@instance.formula}")
-              label('Description:') { stretchy false }
-              @desc_label = non_wrapping_multiline_entry {
+              @doc_display = non_wrapping_multiline_entry {
                 read_only true
-                text @instance.description
+                text "Loading documentation..."
               }
             }
           }
@@ -149,12 +156,6 @@ class OEISExplorer
             w = area_draw_params[:area_width]
             h = area_draw_params[:area_height]
             
-            # Update UI labels
-            @name_label.text = "Name: #{@instance.name}"
-            @rank_label.text = "Rank: #{@instance.rank}"
-            @formula_label.text = "Formula: #{@instance.formula}"
-            @desc_label.text = @instance.description
-
             if (@last_w != w || @last_h != h) && !@user_transformed
               fit_to_area(w, h)
             end
