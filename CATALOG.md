@@ -19,6 +19,7 @@ This catalog is auto-generated and provides an index of all sequences implemente
 | Prime-Step Divisibility Walk | `a(n) = a(n-1) + dir * p_n; dir = -dir if a(n) % n == 0` | [View Full Report](docs/sequences/prime_step_divisibility_walk.md) |
 | Root-Square Bouncer | `a(n) = a(n-1) + dir * floor(sqrt(n)); dir flips if is_square(a(n))` | [View Full Report](docs/sequences/root_square_bouncer.md) |
 | Slow-Grown Legendre | `a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | [View Full Report](docs/sequences/slow_grown_legendre.md) |
+| Greedy Pioneer Walk | `a(n) = a(n-1) + dir * s; s++ if a(n) is new; dir flips if is_square(s)` | [View Full Report](docs/sequences/summand_history_walk.md) |
 | Thue-Morse Prime Walk | `a(n) = a(n-1) + (-1)^popcount(a(n-1)) * p_n` | [View Full Report](docs/sequences/thue_morse_prime_walk.md) |
 
 ## Medium Potential Sequences
