@@ -148,9 +148,8 @@ when "generate", "plot", "gui", "bfile", "analyze"
     terms = instance.generate(count)
     OEISPlotter.plot(terms)
   when "gui"
-    # Note: Glimmer needs to be in the same process, we'll shell out to be safe
-    # or require it if the environment is set up.
-    system "ruby lib/visualizers/oeis_gui.rb sequences/*/#{key}.rb #{count}"
+    # The new GUI has a combobox, so the key is optional
+    system "ruby lib/visualizers/oeis_gui.rb"
   when "bfile"
     puts "Generating b-file for #{instance.name} (up to a(#{count-1}))..."
     terms = instance.generate(count)
