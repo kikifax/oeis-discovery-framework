@@ -173,8 +173,10 @@ class OEISExplorer
             w = area_draw_params[:area_width]
             h = area_draw_params[:area_height]
             
-            if (@last_w != w || @last_h != h) && !@user_transformed
-              fit_to_area(w, h)
+            # Auto-refit if user hasn't panned/zoomed OR if window was resized
+            if !@user_transformed || @last_w != w || @last_h != h
+              fit_to_area(w, h) unless @user_transformed
+              @last_w, @last_h = w, h
             end
 
             # Background
