@@ -6,7 +6,10 @@ This catalog is auto-generated and lists all sequences currently in the discover
 
 | Key | Name | Formula | Description |
 | :--- | :--- | :--- | :--- |
+| `base_n_digit_oscillator` | Base-N Digit Oscillator | `a(n) = a(n-1) + n; if count(digits_base_n(a(n), 1)) is prime, a(n) = floor(sqrt(a(n)))` | a(n) = a(n-1) + n. If the count of '1's in the base-n representation of a(n) is prime, a(n) = sqrt(a(n)). |
 | `congruence_collision` | Congruence Collision Oscillator | `a(n) = a(n-1) + dir * n; if a(n)%n is prime, a(n) %= n and dir flips` | Grows by n in current direction. Crashes to a(n) % n and flips direction whenever a(n) % n is prime. |
+| `divisor_balance_walk` | Divisor-Balance Walk | `a(n) = a(n-1) + dir * n; dir flips and n resets to 1 if sigma0(a(n)) == sigma0(n)` | Grows by current step size in current direction. Step size resets and direction flips if a(n) and n have the same number of divisors. |
+| `divisor_residency_oscillator` | Divisor-Residency Oscillator | `a(n) = a(n-1) + n; if sigma0(a(n)) % n is prime, a(n) = abs(a(n) - n^2)` | a(n) = a(n-1) + n. If (number of divisors of a(n)) % n is prime, a(n) = |a(n) - n^2|. a(0)=1. |
 | `gcd_prime_step` | GCD Prime-Step | `Add p_n if it doesn't divide a(n-1), otherwise divide by p_n` | Add p_n if it doesn't divide a(n-1), otherwise divide by p_n. |
 | `inertial_prime_crash` | Inertial Prime Crash | `a(n) = a(n-1) + dir * step; step resets and dir flips if a(n) is prime and n > last_n + 10` | Accelerates linearly in current direction. Crashes and flips direction if prime, but only after a mandatory 10-step acceleration period. |
 | `liouville_oscillator` | Liouville Prime Oscillator | `a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|` | a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|. a(0)=1. |
