@@ -22,12 +22,11 @@ class OEISSequence
 
   def generate(count)
     @terms ||= []
-    # If we already have enough terms in memory, return them
-    return @terms[0...count] if @terms.size >= count
-
-    # Otherwise, try to load from disk and resume
-    load_cache
     
+    # Try to load from disk if memory is empty
+    load_cache if @terms.empty?
+    
+    # If we still don't have enough, generate more
     if @terms.size < count
       needed = count - @terms.size
       needed.times { @terms << compute_next }
@@ -54,34 +53,40 @@ class OEISSequence
 
   # Efficiency: Use binary packing for terms
   def save_cache
+    @terms ||= []
     # Save terms as 64-bit signed integers
     File.open(terms_path, 'wb') { |f| f.write(@terms.pack('q*')) }
     
     # Save instance variables (state) to resume later
     state = {}
     instance_variables.each do |var|
-      next if var == :@terms || var == :@pi_cache || var == :@prime_gen || var == :@cache # skip data/generators
+      next if [:@terms, :@pi_cache, :@prime_gen, :@cache, :@cache_gen].include?(var)
       state[var] = instance_variable_get(var)
     end
     File.write(state_path, state.to_json)
   end
 
   def load_cache
+    @terms = []
     if File.exist?(terms_path)
-      binary_data = File.binread(terms_path)
-      @terms = binary_data.unpack('q*')
-      
-      if File.exist?(state_path)
-        state = JSON.parse(File.read(state_path))
-        state.each do |var, val|
-          instance_variable_set(var, val)
+      begin
+        binary_data = File.binread(terms_path)
+        @terms = binary_data.unpack('q*') || []
+        
+        if File.exist?(state_path)
+          state = JSON.parse(File.read(state_path))
+          state.each do |var, val|
+            instance_variable_set(var, val)
+          end
+          # Re-initialize the prime generator if it was being used
+          if instance_variable_defined?(:@prime_gen)
+            @prime_gen = Prime.each
+            @n.to_i.times { @prime_gen.next } if @n.to_i > 0
+          end
         end
-        # Re-initialize the prime generator if it existed, seeking to current n
-        # This is a heuristic - some sequences might need custom resume logic
-        if instance_variable_defined?(:@prime_gen)
-          @prime_gen = Prime.each
-          @n.times { @prime_gen.next } if @n > 0
-        end
+      rescue => e
+        puts "Warning: Cache corrupted, resetting state. (#{e.message})"
+        reset_state
       end
     else
       reset_state
