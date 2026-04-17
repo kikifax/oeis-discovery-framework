@@ -1,47 +1,47 @@
 # OEIS Discovery Catalog
 
-This catalog is auto-generated and lists all sequences currently in the discovery framework.
+This catalog is auto-generated and provides an index of all sequences implemented in this framework.
 
 ## High Potential Sequences
 
-| Key | Name | Formula | Description |
-| :--- | :--- | :--- | :--- |
-| `base_n_digit_oscillator` | Base-N Digit Oscillator | `a(n) = a(n-1) + n; if count(digits_base_n(a(n), 1)) is prime, a(n) = floor(sqrt(a(n)))` | a(n) = a(n-1) + n. If the count of '1's in the base-n representation of a(n) is prime, a(n) = sqrt(a(n)). |
-| `congruence_collision` | Congruence Collision Oscillator | `a(n) = a(n-1) + dir * n; if a(n)%n is prime, a(n) %= n and dir flips` | Grows by n in current direction. Crashes to a(n) % n and flips direction whenever a(n) % n is prime. |
-| `divisor_balance_walk` | Divisor-Balance Walk | `a(n) = a(n-1) + dir * n; dir flips and n resets to 1 if sigma0(a(n)) == sigma0(n)` | Grows by current step size in current direction. Step size resets and direction flips if a(n) and n have the same number of divisors. |
-| `divisor_residency_oscillator` | Divisor-Residency Oscillator | `a(n) = a(n-1) + n; if sigma0(a(n)) % n is prime, a(n) = abs(a(n) - n^2)` | a(n) = a(n-1) + n. If (number of divisors of a(n)) % n is prime, a(n) = |a(n) - n^2|. a(0)=1. |
-| `gcd_prime_step` | GCD Prime-Step | `Add p_n if it doesn't divide a(n-1), otherwise divide by p_n` | Add p_n if it doesn't divide a(n-1), otherwise divide by p_n. |
-| `inertial_prime_crash` | Inertial Prime Crash | `a(n) = a(n-1) + dir * step; step resets and dir flips if a(n) is prime and n > last_n + 10` | Accelerates linearly in current direction. Crashes and flips direction if prime, but only after a mandatory 10-step acceleration period. |
-| `liouville_oscillator` | Liouville Prime Oscillator | `a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|` | a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|. a(0)=1. |
-| `popcount_prime_walk` | Popcount-Prime Walk | `a(n) = a(n-1) + popcount(n)` | a(n) = a(n-1) + popcount(n). If prime, a(n) = abs(a(n-1) - n). a(0)=1. |
-| `prime_collision_oscillator` | Super-Prime Collision Oscillator | `a(n) = a(n-1) + dir * p_k; dir flips and k=1 if a(n) is Super-Prime` | Moves by p_k in current direction. K increments every step, but resets to 1 and flips direction when a(n) hits a Super-Prime (prime whose index is also prime). |
-| `prime_index_crash` | Prime-Index Crash | `a(n) = a(n-1) + n if composite` | a(n) = a(n-1) + n if composite. If a(n-1) is the k-th prime, a(n) = k. a(1)=1. |
-| `prime_step_divisibility_walk` | Prime-Step Divisibility Walk | `a(n) = a(n-1) + dir * p_n; dir = -dir if a(n) % n == 0` | a(n) = a(n-1) + dir * p_n. The direction flips whenever a(n) is a multiple of n. a(0)=1. |
-| `slow_grown_legendre` | Slow-Grown Legendre | `a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|. a(0)=1. |
-| `thue_morse_prime_walk` | Thue-Morse Prime Walk | `a(n) = a(n-1) + (-1)^popcount(a(n-1)) * p_n` | a(n) = a(n-1) + p_n if popcount(a(n-1)) is even, else a(n-1) - p_n. a(0)=0. |
+| Name | Formula | Doc |
+| :--- | :--- | :--- |
+| Base-N Digit Oscillator | `a(n) = a(n-1) + n; if count(digits_base_n(a(n), 1)) is prime, a(n) = floor(sqrt(a(n)))` | [View Full Report](docs/sequences/base_n_digit_oscillator.md) |
+| Congruence Collision Oscillator | `a(n) = a(n-1) + dir * n; if a(n)%n is prime, a(n) %= n and dir flips` | [View Full Report](docs/sequences/congruence_collision.md) |
+| Divisor-Balance Walk | `a(n) = a(n-1) + dir * n; dir flips and n resets to 1 if sigma0(a(n)) == sigma0(n)` | [View Full Report](docs/sequences/divisor_balance_walk.md) |
+| Divisor-Residency Oscillator | `a(n) = a(n-1) + n; if sigma0(a(n)) % n is prime, a(n) = abs(a(n) - n^2)` | [View Full Report](docs/sequences/divisor_residency_oscillator.md) |
+| GCD Prime-Step | `Add p_n if it doesn't divide a(n-1), otherwise divide by p_n` | [View Full Report](docs/sequences/gcd_prime_step.md) |
+| Inertial Prime Crash | `a(n) = a(n-1) + dir * step; step resets and dir flips if a(n) is prime and n > last_n + 10` | [View Full Report](docs/sequences/inertial_prime_crash.md) |
+| Liouville Prime Oscillator | `a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|` | [View Full Report](docs/sequences/liouville_oscillator.md) |
+| Popcount-Prime Walk | `a(n) = a(n-1) + popcount(n)` | [View Full Report](docs/sequences/popcount_prime_walk.md) |
+| Super-Prime Collision Oscillator | `a(n) = a(n-1) + dir * p_k; dir flips and k=1 if a(n) is Super-Prime` | [View Full Report](docs/sequences/prime_collision_oscillator.md) |
+| Prime-Index Crash | `a(n) = a(n-1) + n if composite` | [View Full Report](docs/sequences/prime_index_crash.md) |
+| Prime-Step Divisibility Walk | `a(n) = a(n-1) + dir * p_n; dir = -dir if a(n) % n == 0` | [View Full Report](docs/sequences/prime_step_divisibility_walk.md) |
+| Slow-Grown Legendre | `a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | [View Full Report](docs/sequences/slow_grown_legendre.md) |
+| Thue-Morse Prime Walk | `a(n) = a(n-1) + (-1)^popcount(a(n-1)) * p_n` | [View Full Report](docs/sequences/thue_morse_prime_walk.md) |
 
 ## Medium Potential Sequences
 
-| Key | Name | Formula | Description |
-| :--- | :--- | :--- | :--- |
-| `legendre_mod_reset` | Legendre Mod-Reset | `a(n) = a(n-1) + n if not prime, else a(n-1) % (next_prime(n^2) - n^2 + 1)` | a(n) = a(n-1) + n if not prime, else a(n-1) % (next_prime(n^2) - n^2 + 1). a(0)=1. |
-| `popcount_oscillator` | Popcount Oscillator | `Step up by n if popcount(a(n-1)) is prime, down if composite, else stay` | Step up by n if popcount(a(n-1)) is prime, down if composite, else stay. |
-| `prime_tug_of_war` | Prime Tug-of-War | `a(n) = a(n-1) + p_n if that sum is prime, else abs(a(n-1) - LPF(a(n-1) + p_n))` | a(n) = a(n-1) + p_n if that sum is prime, else abs(a(n-1) - LPF(a(n-1) + p_n)). |
-| `square_free_tug` | Square-Free Tug | `Add n-th prime if square-free, else divide by largest square factor` | Add n-th prime if square-free, else divide by largest square factor. |
-| `totient_balance` | Totient Balance | `Step up if previous term is 'prime-heavy' (phi(n) > n/2), otherwise step down by the n-th prime` | Step up if previous term is 'prime-heavy' (phi(n) > n/2), otherwise step down by the n-th prime. |
+| Name | Formula | Doc |
+| :--- | :--- | :--- |
+| Legendre Mod-Reset | `a(n) = a(n-1) + n if not prime, else a(n-1) % (next_prime(n^2) - n^2 + 1)` | [View Full Report](docs/sequences/legendre_mod_reset.md) |
+| Popcount Oscillator | `Step up by n if popcount(a(n-1)) is prime, down if composite, else stay` | [View Full Report](docs/sequences/popcount_oscillator.md) |
+| Prime Tug-of-War | `a(n) = a(n-1) + p_n if that sum is prime, else abs(a(n-1) - LPF(a(n-1) + p_n))` | [View Full Report](docs/sequences/prime_tug_of_war.md) |
+| Square-Free Tug | `Add n-th prime if square-free, else divide by largest square factor` | [View Full Report](docs/sequences/square_free_tug.md) |
+| Totient Balance | `Step up if previous term is 'prime-heavy' (phi(n) > n/2), otherwise step down by the n-th prime` | [View Full Report](docs/sequences/totient_balance.md) |
 
 ## Experimental Sequences
 
-| Key | Name | Formula | Description |
-| :--- | :--- | :--- | :--- |
-| `abundance_oscillator` | Abundance Oscillator | `a(n) = a(n-1) + n if a(n-1) is deficient, a(n-1) - n if abundant, a(n-1) + n^2 if perfect` | a(n) = a(n-1) + n if a(n-1) is deficient, a(n-1) - n if abundant, a(n-1) + n^2 if perfect. a(0)=1. |
-| `chaotic_prime_spring` | Chaotic Prime Spring | `a(n) = a(n-1) + (n ^ waiting_time)` | a(n) = a(n-1) + (n ^ waiting_time). If prime, a(n) = a(n) % (floor(sqrt(a(n))) + 1). |
-| `dynamic_log_balancer` | Dynamic Log Balancer | `a(n) = a(n-1) + n if composite, else a(n-1) - floor(ln(a(n-1))^3)` | a(n) = a(n-1) + n if composite, else a(n-1) - floor(ln(a(n-1))^3). a(0)=1. |
-| `gcd_index_crusher` | GCD Index-Crusher | `Add p_n if gcd(a(n-1), n)==1, else divide by gcd(a(n-1), n)` | Add p_n if gcd(a(n-1), n)==1, else divide by gcd(a(n-1), n). |
-| `legendre_bounder` | Legendre Bounder | `a(n) = a(n-1) - n if there is a prime in [n^2, n^2 + a(n-1)], else a(n-1) + n` | a(n) = a(n-1) - n if there is a prime in [n^2, n^2 + a(n-1)], else a(n-1) + n. a(0)=1. |
-| `legendre_oscillator` | Legendre Oscillator | `a(n) = a(n-1) + n if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | a(n) = a(n-1) + n if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|. a(0)=1. |
-| `log_balanced_oscillator` | Log-Balanced Oscillator | `a(n) = a(n-1) + 1 if composite, else a(n-1) - floor(ln(a(n-1))^2)` | a(n) = a(n-1) + 1 if composite, else a(n-1) - floor(ln(a(n-1))^2). a(0)=1. |
-| `prime_spring` | Prime Spring | `a(n) = a(n-1) + n` | a(n) = a(n-1) + n. If prime, a(n) = a(n) % (steps_since_last_prime * floor(ln(a(n))) + 1). |
-| `prime_spring_plus_n` | Prime Spring (+n) | `a(n) = a(n-1) + n` | a(n) = a(n-1) + n. If a(n) is prime, a(n) = a(n) % (waiting_time * floor(ln(a(n))) + 1). |
-| `prime_square_collapse` | Prime-Square Collapse | `a(n) = sqrt(V) if V = a(n-1) + p_n is a perfect square, else V` | a(n) = sqrt(V) if V = a(n-1) + p_n is a perfect square, else V. a(0)=0. |
-| `prime_step_hunter` | Prime-Step Hunter | `a(n) = a(n-1) + n if a(n-1) is not prime, else |a(n-1) - p_n|` | a(n) = a(n-1) + n if a(n-1) is not prime, else |a(n-1) - p_n|. a(0)=1. |
+| Name | Formula | Doc |
+| :--- | :--- | :--- |
+| Abundance Oscillator | `a(n) = a(n-1) + n if a(n-1) is deficient, a(n-1) - n if abundant, a(n-1) + n^2 if perfect` | [View Full Report](docs/sequences/abundance_oscillator.md) |
+| Chaotic Prime Spring | `a(n) = a(n-1) + (n ^ waiting_time)` | [View Full Report](docs/sequences/chaotic_prime_spring.md) |
+| Dynamic Log Balancer | `a(n) = a(n-1) + n if composite, else a(n-1) - floor(ln(a(n-1))^3)` | [View Full Report](docs/sequences/dynamic_log_balancer.md) |
+| GCD Index-Crusher | `Add p_n if gcd(a(n-1), n)==1, else divide by gcd(a(n-1), n)` | [View Full Report](docs/sequences/gcd_index_crusher.md) |
+| Legendre Bounder | `a(n) = a(n-1) - n if there is a prime in [n^2, n^2 + a(n-1)], else a(n-1) + n` | [View Full Report](docs/sequences/legendre_bounder.md) |
+| Legendre Oscillator | `a(n) = a(n-1) + n if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | [View Full Report](docs/sequences/legendre_oscillator.md) |
+| Log-Balanced Oscillator | `a(n) = a(n-1) + 1 if composite, else a(n-1) - floor(ln(a(n-1))^2)` | [View Full Report](docs/sequences/log_balanced_oscillator.md) |
+| Prime Spring | `a(n) = a(n-1) + n` | [View Full Report](docs/sequences/prime_spring.md) |
+| Prime Spring (+n) | `a(n) = a(n-1) + n` | [View Full Report](docs/sequences/prime_spring_plus_n.md) |
+| Prime-Square Collapse | `a(n) = sqrt(V) if V = a(n-1) + p_n is a perfect square, else V` | [View Full Report](docs/sequences/prime_square_collapse.md) |
+| Prime-Step Hunter | `a(n) = a(n-1) + n if a(n-1) is not prime, else |a(n-1) - p_n|` | [View Full Report](docs/sequences/prime_step_hunter.md) |
