@@ -17,6 +17,7 @@ This catalog is auto-generated and provides an index of all sequences implemente
 | Super-Prime Collision Oscillator | `a(n) = a(n-1) + dir * p_k; dir flips and k=1 if a(n) is Super-Prime` | [View Full Report](docs/sequences/prime_collision_oscillator.md) |
 | Accelerated Prime Fibonacci | `a(n) = a(n-1) + a(n-2) + m if is_prime(a(n-1)) else |a(n-1)-a(n-2)|` | [View Full Report](docs/sequences/prime_hunter_fibonacci.md) |
 | Prime-Index Crash | `a(n) = a(n-1) + n if composite` | [View Full Report](docs/sequences/prime_index_crash.md) |
+| Prime-Step Bouncer | `a(n) = a(n-1) + dir * p_n; dir = -dir if is_prime(|a(n-1)|)` | [View Full Report](docs/sequences/prime_step_bouncer.md) |
 | Prime-Step Divisibility Walk | `a(n) = a(n-1) + dir * p_n; dir = -dir if a(n) % n == 0` | [View Full Report](docs/sequences/prime_step_divisibility_walk.md) |
 | Root-Square Bouncer | `a(n) = a(n-1) + dir * floor(sqrt(n)); dir flips if is_square(a(n))` | [View Full Report](docs/sequences/root_square_bouncer.md) |
 | SPF-Sieve Oscillator | `a=a+dir*s; s++ if new; dir flips if a % spf(n) == 0` | [View Full Report](docs/sequences/sieve_residency_walk.md) |
