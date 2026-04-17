@@ -1,3 +1,6 @@
+require 'json'
+require 'fileutils'
+
 # Base class for OEIS-style sequences
 class OEISSequence
   attr_reader :name, :description, :author, :rank, :formula, :oeis_id, :terms
@@ -18,10 +21,71 @@ class OEISSequence
   end
 
   def generate(count)
-    @terms = []
-    reset_state
-    count.times { @terms << compute_next }
-    @terms
+    @terms ||= []
+    # If we already have enough terms in memory, return them
+    return @terms[0...count] if @terms.size >= count
+
+    # Otherwise, try to load from disk and resume
+    load_cache
+    
+    if @terms.size < count
+      needed = count - @terms.size
+      needed.times { @terms << compute_next }
+      save_cache
+    end
+    
+    @terms[0...count]
+  end
+
+  # Paths for cache files
+  def cache_dir
+    dir = File.join(Dir.pwd, '.cache', self.class.to_s.downcase)
+    FileUtils.mkdir_p(dir) unless Dir.exist?(dir)
+    dir
+  end
+
+  def terms_path
+    File.join(cache_dir, 'terms.bin')
+  end
+
+  def state_path
+    File.join(cache_dir, 'state.json')
+  end
+
+  # Efficiency: Use binary packing for terms
+  def save_cache
+    # Save terms as 64-bit signed integers
+    File.open(terms_path, 'wb') { |f| f.write(@terms.pack('q*')) }
+    
+    # Save instance variables (state) to resume later
+    state = {}
+    instance_variables.each do |var|
+      next if var == :@terms || var == :@pi_cache || var == :@prime_gen || var == :@cache # skip data/generators
+      state[var] = instance_variable_get(var)
+    end
+    File.write(state_path, state.to_json)
+  end
+
+  def load_cache
+    if File.exist?(terms_path)
+      binary_data = File.binread(terms_path)
+      @terms = binary_data.unpack('q*')
+      
+      if File.exist?(state_path)
+        state = JSON.parse(File.read(state_path))
+        state.each do |var, val|
+          instance_variable_set(var, val)
+        end
+        # Re-initialize the prime generator if it existed, seeking to current n
+        # This is a heuristic - some sequences might need custom resume logic
+        if instance_variable_defined?(:@prime_gen)
+          @prime_gen = Prime.each
+          @n.times { @prime_gen.next } if @n > 0
+        end
+      end
+    else
+      reset_state
+    end
   end
 
   # Reset any internal state (counters, current values)

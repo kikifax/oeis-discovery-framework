@@ -1,2 +1,3 @@
 b_files/*
 .DS_Store
+.cache/
