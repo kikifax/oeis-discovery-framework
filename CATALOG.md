@@ -6,9 +6,12 @@ This catalog is auto-generated and lists all sequences currently in the discover
 
 | Key | Name | Formula | Description |
 | :--- | :--- | :--- | :--- |
+| `congruence_collision` | Congruence Collision Oscillator | `a(n) = a(n-1) + dir * n; if a(n)%n is prime, a(n) %= n and dir flips` | Grows by n in current direction. Crashes to a(n) % n and flips direction whenever a(n) % n is prime. |
 | `gcd_prime_step` | GCD Prime-Step | `Add p_n if it doesn't divide a(n-1), otherwise divide by p_n` | Add p_n if it doesn't divide a(n-1), otherwise divide by p_n. |
+| `inertial_prime_crash` | Inertial Prime Crash | `a(n) = a(n-1) + dir * step; step resets and dir flips if a(n) is prime and n > last_n + 10` | Accelerates linearly in current direction. Crashes and flips direction if prime, but only after a mandatory 10-step acceleration period. |
 | `liouville_oscillator` | Liouville Prime Oscillator | `a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|` | a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|. a(0)=1. |
 | `popcount_prime_walk` | Popcount-Prime Walk | `a(n) = a(n-1) + popcount(n)` | a(n) = a(n-1) + popcount(n). If prime, a(n) = abs(a(n-1) - n). a(0)=1. |
+| `prime_collision_oscillator` | Super-Prime Collision Oscillator | `a(n) = a(n-1) + dir * p_k; dir flips and k=1 if a(n) is Super-Prime` | Moves by p_k in current direction. K increments every step, but resets to 1 and flips direction when a(n) hits a Super-Prime (prime whose index is also prime). |
 | `prime_index_crash` | Prime-Index Crash | `a(n) = a(n-1) + n if composite` | a(n) = a(n-1) + n if composite. If a(n-1) is the k-th prime, a(n) = k. a(1)=1. |
 | `slow_grown_legendre` | Slow-Grown Legendre | `a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|. a(0)=1. |
 | `thue_morse_prime_walk` | Thue-Morse Prime Walk | `a(n) = a(n-1) + (-1)^popcount(a(n-1)) * p_n` | a(n) = a(n-1) + p_n if popcount(a(n-1)) is even, else a(n-1) - p_n. a(0)=0. |
