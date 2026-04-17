@@ -13,6 +13,7 @@ This catalog is auto-generated and provides an index of all sequences implemente
 | GCD Prime-Step | `Add p_n if it doesn't divide a(n-1), otherwise divide by p_n` | [View Full Report](docs/sequences/gcd_prime_step.md) |
 | Inertial Prime Crash | `a(n) = a(n-1) + dir * step; step resets and dir flips if a(n) is prime and n > last_n + 10` | [View Full Report](docs/sequences/inertial_prime_crash.md) |
 | Liouville Prime Oscillator | `a(n) = a(n-1) + p_n if Omega(a(n-1)) is even, else |a(n-1) - p_n|` | [View Full Report](docs/sequences/liouville_oscillator.md) |
+| Mirror Prime Bouncer | `a(n) = |a(n-1) + dir * p_n|; dir flips if prime or hit zero` | [View Full Report](docs/sequences/mirror_prime_bouncer.md) |
 | Popcount-Prime Walk | `a(n) = a(n-1) + popcount(n)` | [View Full Report](docs/sequences/popcount_prime_walk.md) |
 | Super-Prime Collision Oscillator | `a(n) = a(n-1) + dir * p_k; dir flips and k=1 if a(n) is Super-Prime` | [View Full Report](docs/sequences/prime_collision_oscillator.md) |
 | Accelerated Prime Fibonacci | `a(n) = a(n-1) + a(n-2) + m if is_prime(a(n-1)) else |a(n-1)-a(n-2)|` | [View Full Report](docs/sequences/prime_hunter_fibonacci.md) |

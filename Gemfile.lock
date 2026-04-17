@@ -28,6 +28,7 @@ GEM
     json (2.19.3)
     libui (0.1.2)
     libui (0.1.2-arm64-darwin)
+    libui (0.1.2-x64-mingw)
     libui (0.1.2-x86_64-darwin)
     matrix (0.4.3)
     method_source (1.1.0)
@@ -65,6 +66,7 @@ GEM
 PLATFORMS
   arm64-darwin
   ruby
+  x64-mingw-ucrt
   x86_64-darwin
   x86_64-linux
 
@@ -86,6 +88,7 @@ CHECKSUMS
   json (2.19.3) sha256=289b0bb53052a1fa8c34ab33cc750b659ba14a5c45f3fcf4b18762dc67c78646
   libui (0.1.2) sha256=8d1b6ce7ea5aa1670f27d1c31d0b6be8c85e0e0cd4dc1ac5182d9f7cbd7a9b26
   libui (0.1.2-arm64-darwin) sha256=d5611e3a5c82d77839b218e8baa59975f11d9ac77405392f42321607a494cae0
+  libui (0.1.2-x64-mingw) sha256=13fd982bcc8ca9c5474eb4042574d31762ae865e47e7df31f6995af651be2414
   libui (0.1.2-x86_64-darwin) sha256=fc0f9309d16f03e822c481374b8041c9ab74cc35c5bfdfd7985642f996454f2f
   matrix (0.4.3) sha256=a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b
   method_source (1.1.0) sha256=181301c9c45b731b4769bc81e8860e72f9161ad7d66dd99103c9ab84f560f5c5
@@ -108,7 +111,7 @@ CHECKSUMS
   wisper (2.0.1) sha256=ce17bc5c3a166f241a2e6613848b025c8146fce2defba505920c1d1f3f88fae6
 
 RUBY VERSION
-  ruby 3.4.7
+   ruby 3.4.7
 
 BUNDLED WITH
-  4.0.2
+   2.6.8
