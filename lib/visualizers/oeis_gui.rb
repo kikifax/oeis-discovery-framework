@@ -7,7 +7,7 @@ class OEISExplorer
 
   def initialize
     @sequences = load_all_sequences
-    @current_key = @sequences.keys.first
+    @current_display_name = @sequences.keys.first
     @num_terms = 2000
     
     @zoom_x = 1.0
@@ -19,7 +19,7 @@ class OEISExplorer
     @user_transformed = false
     @dragging = false
 
-    update_sequence(@current_key)
+    update_sequence(@current_display_name)
   end
 
   def load_all_sequences
@@ -34,20 +34,29 @@ class OEISExplorer
       
       if klass
         key = File.basename(file, '.rb')
-        seqs[key] = klass
+        instance = klass.new
+        # Get score for sorting (using cache if exists)
+        report = instance.analyze(1000)
+        score = report[:fitness_score]
+        
+        # Store metadata for the dropdown
+        display_name = "[#{score.to_i.to_s.rjust(3)}] #{instance.name}"
+        seqs[display_name] = { key: key, klass: klass, score: score }
       end
     end
-    seqs.sort.to_h
+    # Sort by score descending
+    seqs.sort_by { |_, v| -v[:score] }.to_h
   end
 
-  def update_sequence(key)
-    @current_key = key
-    @instance = @sequences[key].new
+  def update_sequence(display_name)
+    @current_display_name = display_name
+    data = @sequences[display_name]
+    @instance = data[:klass].new
     @terms = @instance.generate(@num_terms)
     @user_transformed = false # Reset view for new sequence
     
     # Load Documentation
-    doc_path = File.join(__dir__, '..', '..', 'docs', 'sequences', "#{key}.md")
+    doc_path = File.join(__dir__, '..', '..', 'docs', 'sequences', "#{data[:key]}.md")
     if File.exist?(doc_path)
       # Strip the Doc Version header for the UI
       content = File.read(doc_path).lines.reject { |l| l.start_with?("Doc Version:") }.join.strip
@@ -114,7 +123,7 @@ class OEISExplorer
                   val = e.text.to_i
                   if val > 0
                     @num_terms = val
-                    update_sequence(@current_key)
+                    update_sequence(@current_display_name)
                   end
                 end
               }
