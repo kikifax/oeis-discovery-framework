@@ -74,22 +74,30 @@ class OEISExplorer
     max_val = @terms.max
     min_val = @terms.min
     
-    view_max = [max_val, 0].max
-    view_min = [min_val, 0].min
-    range_y = (view_max - view_min).to_f
+    # We want to see both the sequence and the axes.
+    # The X-axis is at y=0, and the Y-axis is at x=0.
+    v_max = [max_val, 0].max
+    v_min = [min_val, 0].min
+    range_y = (v_max - v_min).to_f
     range_y = 1.0 if range_y == 0
     
-    padding_x = 0.05
-    padding_y = 0.15
+    # Horizontal range is from index 0 to @terms.size
+    range_x = @terms.size.to_f
     
-    draw_w = width * (1.0 - padding_x * 2)
-    draw_h = height * (1.0 - padding_y * 2)
+    padding = 0.1 # 10% padding on all sides
+    
+    draw_w = width * (1.0 - padding * 2)
+    draw_h = height * (1.0 - padding * 2)
 
-    @zoom_x = draw_w / [@terms.size, 1].max
+    @zoom_x = draw_w / range_x
     @zoom_y = draw_h / range_y
     
-    @offset_x = width * padding_x
-    @offset_y = (height * padding_y) + (view_max * @zoom_y)
+    # offset_x: Padding + (0 * zoom_x)
+    @offset_x = width * padding
+    
+    # offset_y: The pixel position of the X-axis (y=0)
+    # It is TopPadding + (distance from V_MAX to 0)
+    @offset_y = (height * padding) + (v_max * @zoom_y)
     
     @last_w = width
     @last_h = height
