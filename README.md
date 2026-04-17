@@ -20,31 +20,37 @@ This framework has already uncovered several promising candidates for OEIS submi
 
 ## 🛠 Usage
 
+First, install the dependencies using Bundler:
+```bash
+bundle install
+```
+
 The framework is managed by a central CLI: `oeis_cli.rb`.
 
 ### List Sequences
-View all sequences categorized by their potential for OEIS submission.
 ```bash
-ruby oeis_cli.rb list
+bundle exec ruby oeis_cli.rb list
 ```
 
 ### Generate Terms
-Print the first $n$ terms of a specific sequence.
 ```bash
-ruby oeis_cli.rb generate prime_index_crash 100
+bundle exec ruby oeis_cli.rb generate prime_index_crash 100
+```
+
+### Analyze
+```bash
+bundle exec ruby oeis_cli.rb analyze prime_index_crash 1000
 ```
 
 ### Visualize
-Explore the patterns visually using terminal plots or a graphical UI (requires Glimmer).
 ```bash
-ruby oeis_cli.rb plot popcount_prime_walk 500
-ruby oeis_cli.rb gui prime_index_crash 2000
+bundle exec ruby oeis_cli.rb plot popcount_prime_walk 500
+bundle exec ruby oeis_cli.rb gui
 ```
 
 ### Generate b-file
-Prepare data for OEIS submission in the standard `b-file` format.
 ```bash
-ruby oeis_cli.rb bfile prime_index_crash 10000
+bundle exec ruby oeis_cli.rb bfile prime_index_crash 10000
 ```
 
 ---

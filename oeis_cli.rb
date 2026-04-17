@@ -198,7 +198,7 @@ when "generate", "plot", "gui", "bfile", "analyze"
     OEISPlotter.plot(terms)
   when "gui"
     # The new GUI has a combobox, so the key is optional
-    system "ruby lib/visualizers/oeis_gui.rb"
+    system "bundle exec ruby lib/visualizers/oeis_gui.rb"
   when "bfile"
     puts "Generating b-file for #{instance.name} (up to a(#{count-1}))..."
     terms = instance.generate(count)
