@@ -11,6 +11,7 @@ This catalog is auto-generated and lists all sequences currently in the discover
 | `popcount_prime_walk` | Popcount-Prime Walk | `a(n) = a(n-1) + popcount(n)` | a(n) = a(n-1) + popcount(n). If prime, a(n) = abs(a(n-1) - n). a(0)=1. |
 | `prime_index_crash` | Prime-Index Crash | `a(n) = a(n-1) + n if composite` | a(n) = a(n-1) + n if composite. If a(n-1) is the k-th prime, a(n) = k. a(1)=1. |
 | `slow_grown_legendre` | Slow-Grown Legendre | `a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|` | a(n) = a(n-1) + SPF(n) if composite, else |a(n-1) - n * (next_prime(n^2) - n^2)|. a(0)=1. |
+| `thue_morse_prime_walk` | Thue-Morse Prime Walk | `a(n) = a(n-1) + (-1)^popcount(a(n-1)) * p_n` | a(n) = a(n-1) + p_n if popcount(a(n-1)) is even, else a(n-1) - p_n. a(0)=0. |
 
 ## Medium Potential Sequences
 

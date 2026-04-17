@@ -72,6 +72,7 @@ OptionParser.new do |opts|
     puts "\nCommands:"
     puts "  list              List all available sequences"
     puts "  generate <key> <n>  Print the first n terms of a sequence"
+    puts "  analyze <key> <n>   Perform statistical analysis and fitness scoring"
     puts "  plot <key> <n>      Launch terminal plotter for first n terms"
     puts "  gui <key> <n>       Launch graphical explorer for first n terms"
     puts "  bfile <key> <n>     Generate a b-file in b_files/ directory"
@@ -89,7 +90,7 @@ when "list"
   list_sequences(sequences)
 when "build-catalog"
   build_catalog(sequences)
-when "generate", "plot", "gui", "bfile"
+when "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]
     puts "Error: Sequence '#{key}' not found. Use 'ruby oeis_cli.rb list' to see available keys."
     exit 1
@@ -98,6 +99,47 @@ when "generate", "plot", "gui", "bfile"
   instance = sequences[key].new
   
   case command
+  when "analyze"
+    puts "=========================================================="
+    puts "      FULL OEIS FITNESS REPORT: #{instance.name}"
+    puts "=========================================================="
+    report = instance.analyze(count)
+    
+    puts "\n[ 1. BASIC STATISTICS ]"
+    puts "Terms Generated:  #{report[:stats][:terms]}"
+    puts "Value Range:      #{report[:stats][:min]} to #{report[:stats][:max]}"
+    puts "Average Value:    #{report[:stats][:avg]}"
+    puts "Growth Pattern:   #{report[:stats][:growth_type]}"
+    puts "Is Periodic?      #{report[:stats][:is_periodic] ? 'YES (Warning: Low Fitness)' : 'No'}"
+    
+    puts "\n[ 2. DYNAMIC BEHAVIOR ]"
+    puts "Average Swing:    #{report[:dynamics][:avg_swing]}"
+    puts "Max Step Swing:   #{report[:dynamics][:max_swing]}"
+    puts "Erraticness:      #{report[:dynamics][:erraticness]} (SD of swings)"
+    puts "Significant Drops:#{report[:dynamics][:resets]} (>50% reset)"
+    
+    puts "\n[ 3. COMPOSITION ]"
+    puts "Prime Density:    #{(report[:composition][:prime_density] * 100).round(2)}%"
+    puts "Zero Density:     #{(report[:composition][:zero_density] * 100).round(2)}%"
+    puts "Uniqueness Ratio: #{(report[:composition][:unique_ratio] * 100).round(2)}%"
+    
+    puts "\n[ 4. SCORING BREAKDOWN ]"
+    puts "Diversity Score:  #{report[:scoring][:diversity].round(1)} / 25"
+    puts "Activity Score:   #{report[:scoring][:activity].round(1)} / 25"
+    puts "Novelty Score:    #{report[:scoring][:novelty].round(1)} / 25"
+    puts "Longevity Score:  #{report[:scoring][:longevity].round(1)} / 25"
+    
+    puts "\n----------------------------------------------------------"
+    printf("FINAL FITNESS SCORE: %.1f / 100\n", report[:fitness_score])
+    puts "----------------------------------------------------------"
+    
+    case report[:fitness_score]
+    when 0..30 then puts "STATUS: POOR - High probability of being trivial or periodic."
+    when 31..60 then puts "STATUS: FAIR - Interesting behavior, but may lack enough 'surprise'."
+    when 61..85 then puts "STATUS: STRONG - Highly recommended for OEIS search/submission."
+    else puts "STATUS: ELITE - Exceptional mathematical profile. Submit ASAP."
+    end
+    puts "=========================================================="
   when "generate"
     puts "Generating #{count} terms for #{instance.name}..."
     puts instance.generate(count).join(", ")

@@ -33,11 +33,111 @@ class OEISSequence
     @terms.join(", ")
   end
 
-  def print_report
-    puts "NAME: #{@name}"
-    puts "RANK: #{@rank}"
-    puts "FORMULA: #{@formula}"
-    puts "DESC: #{@description}"
-    puts "TERMS: #{to_oeis_format}"
+  def analyze(count)
+    terms = generate(count)
+    return if terms.empty?
+
+    max_val = terms.max
+    min_val = terms.min
+    avg = terms.sum.to_f / terms.size
+    
+    # 1. Growth Analysis
+    # Compare first 10% vs last 10%
+    chunk = (count * 0.1).to_i
+    start_avg = terms[0...chunk].sum.to_f / chunk
+    end_avg = terms[-chunk..-1].sum.to_f / chunk
+    growth_factor = end_avg / [start_avg, 1].max
+    
+    growth_type = case
+      when growth_factor > 10 then "Explosive (Exponential/High Poly)"
+      when growth_factor > 1.5 then "Steady Growth"
+      when growth_factor < 0.5 then "Decreasing/Converging"
+      else "Stagnant/Oscillating"
+    end
+
+    # 2. Periodicity Check
+    # Look for repeating sub-sequences of length 2..20
+    is_periodic = false
+    (2..20).each do |len|
+      next if terms.size < len * 3
+      if terms[-len..-1] == terms[-(len*2)...-len] && terms[-len..-1] == terms[-(len*3)...-(len*2)]
+        is_periodic = true
+        break
+      end
+    end
+
+    # 3. Step Dynamics (Swings)
+    diffs = terms.each_cons(2).map { |a, b| (a - b).abs }
+    max_swing = diffs.max || 0
+    avg_swing = diffs.empty? ? 0 : diffs.sum.to_f / diffs.size
+    variance = diffs.empty? ? 0 : diffs.map { |d| (d - avg_swing)**2 }.sum / diffs.size
+    erraticness = Math.sqrt(variance)
+    
+    # 4. Resets (Sudden drops > 50% of current value)
+    resets = terms.each_cons(2).count { |a, b| b < a * 0.5 }
+    
+    # 5. Composition Metrics
+    unique_ratio = terms.uniq.size.to_f / terms.size
+    zero_count = terms.count(0)
+    prime_count = terms.count { |t| t > 1 && t.prime? }
+
+    # OEIS Fitness Scoring Breakdown (Heuristic Model)
+    # This scoring system rewards sequences that show 'organized chaos'—mathematically
+    # rigorous rules that produce unpredictable but non-random results.
+    scores = {}
+    
+    # 1. Diversity (0-25): How many unique numbers?
+    # OEIS editors often reject sequences that simply cycle through a small set of values.
+    # Higher diversity implies a more complex/richer mathematical state space.
+    scores[:diversity] = [unique_ratio * 25, 25].min
+    
+    # 2. Activity/Entropy (0-25): High reset density or erratic swings.
+    # A sequence that just grows linearly is 'boring'. We reward sequences with 
+    # 'feedback loops' where hitting a certain number (like a prime) triggers a crash.
+    reset_score = (resets.to_f / count) * 200
+    swing_score = (erraticness / [avg, 1].max) * 50
+    scores[:activity] = [[reset_score + swing_score, 25].min, 0].max
+    
+    # 3. Mathematical Novelty (0-25): Interaction with primes and zeros.
+    # OEIS is fundamentally about number theory. Sequences that frequently land on
+    # primes or return to zero (roots/resets) have higher 'inter-connectivity' 
+    # with existing A-numbers in the database.
+    novelty_ratio = (prime_count + zero_count).to_f / count
+    scores[:novelty] = [novelty_ratio * 50, 25].min
+    
+    # 4. Longevity/Stability (0-25): Anti-triviality and computability.
+    # Points are deducted for trivial periodicity (cycle of 1, 2, 1, 2) or for
+    # exploding so fast that b-files (10,000 terms) become impossible to compute/store.
+    stability = 25
+    stability -= 20 if is_periodic
+    stability -= 10 if growth_factor > 1000 
+    scores[:longevity] = [stability, 0].max
+
+    total_score = scores.values.sum
+
+    {
+      metadata: { name: @name, rank: @rank, formula: @formula },
+      stats: {
+        terms: terms.size,
+        max: max_val,
+        min: min_val,
+        avg: avg.round(2),
+        growth_type: growth_type,
+        is_periodic: is_periodic
+      },
+      dynamics: {
+        max_swing: max_swing,
+        avg_swing: avg_swing.round(2),
+        erraticness: erraticness.round(2),
+        resets: resets
+      },
+      composition: {
+        prime_density: (prime_count.to_f / terms.size).round(4),
+        zero_density: (zero_count.to_f / terms.size).round(4),
+        unique_ratio: unique_ratio.round(4)
+      },
+      scoring: scores,
+      fitness_score: total_score.round(1)
+    }
   end
 end
