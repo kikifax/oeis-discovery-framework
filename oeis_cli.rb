@@ -3,6 +3,7 @@ require 'prime'
 require 'json'
 require 'fileutils'
 require_relative 'lib/version'
+require_relative 'lib/sequence_template'
 
 $stdout.sync = true
 puts "OEIS Discovery Framework v#{OEIS::VERSION}"
@@ -20,7 +21,6 @@ def load_sequence_class(file)
   existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
   require File.expand_path(file)
   new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-  # Find the class that matches the filename or the first new one
   key = File.basename(file, '.rb').gsub('_', '')
   klass = new_classes.find { |c| c.to_s.downcase.include?(key) }
   klass || (new_classes - existing_classes).first
@@ -29,45 +29,36 @@ end
 def build_catalog(sequences, force: false)
   cache_path = '.cache/catalog.json'
   docs_dir = File.join(__dir__, 'docs', 'sequences')
+  
+  if !force && File.exist?(cache_path)
+    cache_time = File.mtime(cache_path)
+    needs_update = sequences.values.any? { |f| File.mtime(f) > cache_time }
+    return unless needs_update
+    puts "[1/2] Detecting changes... Updating cache."
+  end
+
   FileUtils.mkdir_p(docs_dir)
   FileUtils.mkdir_p('.cache')
-
-  # Load existing to see what we can skip
-  existing_catalog = File.exist?(cache_path) ? (JSON.parse(File.read(cache_path)) rescue []) : []
-  catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
   
   catalog_data = []
-  updated = false
-
   sequences.each do |key, file|
-    cached = catalog_map[key]
-    # If not forced, and we have a cached score, and the file hasn't changed, reuse it.
-    if !force && cached && File.mtime(file) < File.mtime(cache_path)
-      catalog_data << cached
-    else
-      puts "Analyzing: #{key}..."
-      begin
-        klass = load_sequence_class(file)
-        instance = klass.new
-        report = instance.analyze(1000)
-        catalog_data << { 
-          key: key, 
-          name: instance.name, 
-          rank: instance.rank, 
-          formula: instance.formula, 
-          fitness_score: report[:fitness_score] 
-        }
-        updated = true
-      rescue => e
-        puts "Error on #{key}: #{e.message}"
-      end
+    puts "Scanning: #{key}..."
+    begin
+      klass = load_sequence_class(file)
+      instance = klass.new
+      report = instance.analyze(1000)
+      catalog_data << {
+        key: key,
+        name: instance.name,
+        rank: instance.rank,
+        formula: instance.formula,
+        fitness_score: report[:fitness_score]
+      }
+    rescue => e
+      puts "Error on #{key}: #{e.message}"
     end
   end
-
-  if updated || !File.exist?(cache_path)
-    File.write(cache_path, catalog_data.to_json)
-    puts "Catalog metadata synced."
-  end
+  File.write(cache_path, catalog_data.to_json)
 end
 
 sequences = load_sequences
@@ -80,51 +71,21 @@ end.parse!
 command = ARGV[0]
 
 case command
-when "explore"
-  # Detect if catalog is corrupted with placeholders (all 50s)
-  if File.exist?('.cache/catalog.json')
-    raw = File.read('.cache/catalog.json')
-    if raw.include?('"fitness_score":50') && !raw.include?('"fitness_score":7')
-      puts "[!] Corrupted catalog detected. Forcing full re-sync..."
-      build_catalog(sequences, force: true)
-    else
-      build_catalog(sequences)
-    end
-  else
-    build_catalog(sequences)
-  end
-  
-  LOCK_FILE = ".cache/session.lock"
-  File.write(LOCK_FILE, Process.pid)
-  
-  puts "Launching Discovery Station..."
-  pids = []
-  pids << spawn("bundle exec ruby lib/visualizers/gui_dashboard.rb", :out=>:out, :err=>:err)
-  pids << spawn("bundle exec ruby lib/visualizers/raylib_viewer.rb", :out=>:out, :err=>:err)
-  
-  begin
-    loop do
-      pids.each do |pid|
-        if Process.waitpid(pid, Process::WNOHANG)
-          raise Interrupt
-        end
-      end
-      sleep 0.5
-    end
-  rescue Interrupt
-    puts "\nShutting down..."
-  ensure
-    File.delete(LOCK_FILE) rescue nil
-    pids.each do |pid|
-      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        system("taskkill /F /PID #{pid} /T >NUL 2>&1")
-      else
-        Process.kill("KILL", pid) rescue nil
-      end
-    end
-  end
+when "list"
+  sequences.each { |k, _| puts k }
 when "build-catalog"
   build_catalog(sequences, force: true)
+when "explore"
+  build_catalog(sequences)
+  puts "[2/2] Launching Unified Discovery Station..."
+  system("bundle exec ruby lib/visualizers/raylib_viewer.rb")
+when "analyze"
+  key = ARGV[1]
+  count = (ARGV[2] || 1000).to_i
+  if sequences[key]
+    klass = load_sequence_class(sequences[key])
+    puts klass.new.analyze(count).to_json
+  end
 else
   puts "Usage: bundle exec ruby oeis_cli.rb explore"
 end
