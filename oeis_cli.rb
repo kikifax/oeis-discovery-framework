@@ -92,6 +92,7 @@ def build_catalog(sequences, force: false)
     cached = catalog_map[key]
     if cached && File.mtime(file) < File.mtime(cache_path) && existing_version >= DOCUMENTER_VERSION
       catalog_data << cached
+      report = { fitness_score: cached['fitness_score'] }
     else
       puts "Analyzing #{key}..."
       report = instance.analyze(1000)
@@ -118,10 +119,6 @@ def build_catalog(sequences, force: false)
         f.puts "\n| Metric | Value |"
         f.puts "| :--- | :--- |"
         f.puts "| Final Score | **#{report[:fitness_score]} / 100** |"
-        f.puts "| Growth Pattern | #{report[:stats][:growth_type]} |"
-        f.puts "| Erraticness | #{report[:dynamics][:erraticness]} |"
-        f.puts "| Significant Resets | #{report[:dynamics][:resets]} |"
-        f.puts "| Prime Density | #{(report[:composition][:prime_density] * 100).round(2)}% |"
         f.puts "| Unique Ratio | #{(report[:composition][:unique_ratio] * 100).round(2)}% |"
         f.puts "\n## Sample Terms"
         f.puts "`#{instance.generate(50).join(', ')}`"
@@ -143,7 +140,7 @@ def build_catalog(sequences, force: false)
       catalog_data.select { |s| s['rank'] == rank || s[:rank] == rank }
                   .sort_by { |s| -(s['fitness_score'] || s[:fitness_score]) }
                   .each do |s|
-        f.puts "| #{s['name'] || s[:name]} | `#{s['formula'] || s[:formula]}` | [View Full Report](docs/sequences/#{s['key'] || s[:key]}.md) |"
+        f.puts "| #{s['name'] || s['name']} | `#{s['formula'] || s['formula']}` | [View Full Report](docs/sequences/#{s['key'] || s['key']}.md) |"
       end
     end
   end
@@ -182,20 +179,19 @@ when "explore"
   # Clean state
   File.delete('.cache/gui_state.json') rescue nil
   build_catalog(sequences)
-
+  
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
-
+  
   puts "\n🚀 Discovery Station starting! v#{OEIS::VERSION}"
   puts ">> Press Ctrl+C in this console to exit."
 
   # Launch Dashboard in background thread
-  # Using 'system' inside a thread is the most reliable way to see output on Windows
   t = Thread.new { system(dashboard_cmd) }
-
+  
   # Launch Viewer in main foreground
   system(viewer_cmd)
-
+  
   # Cleanup
   t.kill rescue nil
   if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
