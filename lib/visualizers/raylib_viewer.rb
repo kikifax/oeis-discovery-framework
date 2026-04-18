@@ -36,6 +36,9 @@ class RaylibExplorer
     @zoom_x = 1.0
     @zoom_y = 1.0
     
+    # Pre-allocate FFI structs to avoid redefinition crashes
+    @text_pos = Raylib::Vector2.new
+    
     $stdout.sync = true
   end
 
@@ -46,33 +49,44 @@ class RaylibExplorer
   end
 
   def init_theme
-    @bg_dark    = make_color(24, 24, 28)
-    @sidebar_bg = make_color(35, 35, 42)
-    @accent     = make_color(0, 180, 255)
-    @text_main  = make_color(240, 240, 250)
-    @text_dim   = make_color(160, 160, 180)
-    @axis_c     = make_color(60, 60, 75)
-    @hover_bg   = make_color(255, 255, 255, 25)
-    @panel_bg   = make_color(15, 15, 20)
+    @bg_dark    = make_color(22, 22, 26)
+    @sidebar_bg = make_color(32, 32, 40)
+    @accent     = make_color(0, 170, 255)
+    @text_main  = make_color(230, 230, 240)
+    @text_dim   = make_color(150, 150, 170)
+    @axis_c     = make_color(50, 50, 65)
+    @hover_bg   = make_color(255, 255, 255, 20)
+    @panel_bg   = make_color(12, 12, 18)
     
-    # SYSTEM FONT (Modern Sans-Serif)
+    # SYSTEM FONT DISCOVERY
+    windir = ENV['WINDIR'] || "C:/Windows"
     font_paths = [
-      "C:/Windows/Fonts/segoeui.ttf",    # Windows Modern
-      "C:/Windows/Fonts/arial.ttf",      # Fallback
-      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", # Linux
-      "/System/Library/Fonts/SFNSDisplay.ttf" # macOS
+      File.join(windir, "Fonts", "segoeui.ttf"),
+      File.join(windir, "Fonts", "arial.ttf"),
+      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+      "/System/Library/Fonts/SFNSDisplay.ttf"
     ]
     
     @font = nil
     font_paths.each do |path|
-      if File.exist?(path)
-        @font = LoadFontEx(path, 96, nil, 0) # High-res atlas
-        SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR) if @font
-        break if @font
+      puts "[DEBUG] Checking font: #{path}"
+      begin
+        # Use simple Raylib load check (doesn't care about Windows folder permissions as much as Ruby)
+        @font = LoadFontEx(path, 64, nil, 0)
+        if @font && @font.texture.id > 0
+          SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR)
+          puts "[SUCCESS] Loaded Modern UI Font: #{path}"
+          break
+        end
+      rescue
+        next
       end
     end
-    @font ||= GetFontDefault()
-    puts "[Station] Modern Typography Loaded."
+    
+    unless @font && @font.texture.id > 0
+      puts "[WARNING] Could not load system font. Using Raylib default."
+      @font = GetFontDefault()
+    end
   end
 
   def load_catalog
@@ -119,13 +133,15 @@ class RaylibExplorer
         if File.exist?(doc_path)
           @doc_lines = File.read(doc_path).lines.reject{|l| l.start_with?("#", "Doc Version:") || l.strip.empty? }.first(25).map(&:strip)
         else
-          @doc_lines = ["Mathematical analysis for #{key} not yet generated."]
+          @doc_lines = ["No documentation found.", "Run build-catalog."]
         end
         
         auto_fit_all()
-        puts "[Station] Loaded #{key}"
+        puts "[Station] Synchronized #{key}"
       end
-    rescue => e; puts "Error: #{e.message}"; end
+    rescue => e
+      puts "Error loading #{key}: #{e.message}"
+    end
   end
 
   def auto_fit_all
@@ -135,7 +151,7 @@ class RaylibExplorer
     max_v, min_v = @terms.max, @terms.min
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 250.0) / range_y
-    @offset_y = 120.0 + (max_v * @zoom_y)
+    @offset_y = 100.0 + (max_v * @zoom_y)
     graph_area_w = w - SIDEBAR_W
     @zoom_x = (graph_area_w - 120.0) / [@terms.size.to_f, 1].max
     @offset_x = SIDEBAR_W + 60.0
@@ -157,32 +173,30 @@ class RaylibExplorer
   end
 
   def draw_text_pro(text, x, y, size, color)
-    # Using specific spacing for modern fonts
-    DrawTextEx(@font, text, Vector2.new(x, y), size.to_f, 0.5, color)
+    @text_pos[:x], @text_pos[:y] = x.to_f, y.to_f
+    DrawTextEx(@font, text.to_s, @text_pos, size.to_f, 1.0, color)
   end
 
   def update
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX().to_f, GetMouseY().to_f
 
-    # ENTER EDIT MODE
-    if (IsKeyPressed(KEY_T) || (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && my < 65 && mx > w - 250)) && !@edit_mode
+    # KEYBOARD SHORTCUTS (Checked every frame)
+    if IsKeyPressed(KEY_T) && !@edit_mode
       @edit_mode = true
-      @input_text = "" # Clear for fresh entry
-      return
+      @input_text = ""
     end
 
     if @edit_mode
       char = GetCharPressed()
       while char > 0
-        @input_text << char.chr if (char >= 48) && (char <= 57) # Only digits
+        @input_text << char.chr if (char >= 48) && (char <= 57)
         char = GetCharPressed()
       end
-      
-      @input_text = @input_text[0...-1] if IsKeyPressed(KEY_BACKSPACE) && @input_text.length > 0
+      @input_text = @input_text[0...-1] if (IsKeyPressed(KEY_BACKSPACE) || IsKeyDown(KEY_BACKSPACE)) && @input_text.length > 0
       
       if IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)
-        @num_terms = @input_text.to_i if @input_text.to_i > 10
+        @num_terms = @input_text.to_i if @input_text.to_i > 5
         load_sequence(@sequences[@current_idx][:key])
         @edit_mode = false
       elsif IsKeyPressed(KEY_ESCAPE)
@@ -191,22 +205,26 @@ class RaylibExplorer
       return
     end
 
-    # INTERACTION
     if mx < SIDEBAR_W
-      @scroll_offset += GetMouseWheelMove() * 50
+      @scroll_offset += GetMouseWheelMove() * 40
       @scroll_offset = [@scroll_offset, 0].min
       if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
         list_y = 100.0 + @scroll_offset
         @sequences.each_with_index do |s, i|
-          if my >= list_y && my < list_y + 35
+          if my >= list_y && my < list_y + 32
             @current_idx = i; load_sequence(s[:key])
             break
           end
-          list_y += 35
+          list_y += 32
         end
       end
     else
-      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT); @dragging = true; @last_mouse_x = mx
+      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+        if my < 65 && mx > w - 280
+          @edit_mode = true; @input_text = ""
+        else
+          @dragging = true; @last_mouse_x = mx
+        end
       elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
       if @dragging; @offset_x += (mx - @last_mouse_x); @last_mouse_x = mx; end
       @zoom_x *= (GetMouseWheelMove() > 0 ? 1.2 : 0.8) if GetMouseWheelMove() != 0
@@ -243,27 +261,26 @@ class RaylibExplorer
     # --- SIDEBAR ---
     DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, @sidebar_bg)
     DrawRectangle(SIDEBAR_W.to_i - 1, 0, 1, h.to_i, make_color(255, 255, 255, 20))
-    draw_text_pro("EXPLORER", 35, 35, 24, WHITE)
-    DrawRectangle(35, 68, 60, 3, @accent)
+    draw_text_pro("EXPLORER STATION", 35, 35, 20, WHITE)
+    DrawRectangle(35, 65, 40, 2, @accent)
 
     BeginScissorMode(0, 95, SIDEBAR_W.to_i, (h - 480).to_i)
       list_y = 105.0 + @scroll_offset
       @sequences.each_with_index do |s, i|
         color = (i == @current_idx) ? WHITE : @text_dim
         if i == @current_idx
-          DrawRectangle(25, list_y.to_i - 5, (SIDEBAR_W - 50).to_i, 35, @hover_bg)
-          DrawRectangle(25, list_y.to_i - 5, 4, 35, @accent)
+          DrawRectangle(25, list_y.to_i - 4, (SIDEBAR_W - 50).to_i, 30, @hover_bg)
+          DrawRectangle(25, list_y.to_i - 4, 3, 30, @accent)
         end
         draw_text_pro(s[:display], 45, list_y.to_i + 4, 18, color)
-        list_y += 35
+        list_y += 32
       end
     EndScissorMode()
 
-    # Doc Panel
     panel_y = h - 350
-    DrawRectangle(25, panel_y.to_i, (SIDEBAR_W - 50).to_i, 325, @panel_bg)
-    DrawRectangleLines(25, panel_y.to_i, (SIDEBAR_W - 50).to_i, 325, @axis_c)
-    draw_text_pro("MATHEMATICAL ANALYSIS", 45, panel_y.to_i + 20, 14, @accent)
+    DrawRectangle(25, panel_y.to_i, (SIDEBAR_W - 50).to_i, 330, @panel_bg)
+    DrawRectangleLines(25, panel_y.to_i, (SIDEBAR_W - 50).to_i, 330, @axis_c)
+    draw_text_pro("ANALYSIS", 45, panel_y.to_i + 20, 14, @accent)
     y_ptr = panel_y + 55
     (@doc_lines || []).each do |line|
       draw_text_pro(line[0..40], 45, y_ptr.to_i, 14, @text_dim)
@@ -277,11 +294,11 @@ class RaylibExplorer
     
     terms_color = @edit_mode ? @accent : @text_dim
     terms_text  = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
-    draw_text_pro(terms_text, w.to_i - 280, 30, 22, terms_color)
+    draw_text_pro(terms_text, w.to_i - 280, 30, 20, terms_color)
 
-    # Status Bar
-    DrawRectangle(SIDEBAR_W.to_i, h.to_i - 40, (w - SIDEBAR_W).to_i, 40, @sidebar_bg)
-    draw_text_pro("WHEEL: Zoom | DRAG: Pan | R: Reset Fit | T: Edit Terms (Type + Enter)", SIDEBAR_W.to_i + 40, h.to_i - 28, 14, @text_dim)
+    # Footer
+    DrawRectangle(SIDEBAR_W.to_i, h.to_i - 35, (w - SIDEBAR_W).to_i, 35, @bg_dark)
+    draw_text_pro("WHEEL: Zoom | DRAG: Pan | R: Fit | T: Edit Terms (Type + Enter)", SIDEBAR_W.to_i + 40, h.to_i - 25, 14, @text_dim)
 
     EndDrawing()
   end
