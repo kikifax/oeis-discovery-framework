@@ -42,47 +42,53 @@ class OEISSequence
   end
 
   # Paths for cache files
-  def cache_dir
-    dir = File.join(Dir.pwd, '.cache', self.class.to_s.downcase)
+  def cache_path
+    dir = File.join(Dir.pwd, '.cache')
     FileUtils.mkdir_p(dir) unless Dir.exist?(dir)
-    dir
+    File.join(dir, "#{self.class.to_s.downcase}.cache")
   end
 
-  def terms_path
-    File.join(cache_dir, 'terms.bin')
-  end
-
-  def state_path
-    File.join(cache_dir, 'state.json')
-  end
-
-  # Efficiency: Use binary packing for terms
+  # High-Performance Unified Binary Format:
+  # [4 bytes: Header Length] [N bytes: Marshal State] [M bytes: Binary Terms]
   def save_cache
     @terms ||= []
-    # Save terms as 64-bit signed integers
-    File.open(terms_path, 'wb') { |f| f.write(@terms.pack('q*')) }
     
-    # Save instance variables (state) to resume later
+    # 1. Prepare State (Marshal is better than JSON for complex Ruby objects like Sets)
     state = {}
     instance_variables.each do |var|
-      next if [:@terms, :@pi_cache, :@prime_gen, :@cache, :@cache_gen].include?(var)
+      next if [:@terms, :@pi_cache, :@prime_gen, :@cache, :@cache_gen, :@history_set].include?(var)
       state[var] = instance_variable_get(var)
     end
-    File.write(state_path, state.to_json)
+    state_blob = Marshal.dump(state)
+    
+    # 2. Write Unified File
+    File.open(cache_path, 'wb') do |f|
+      f.write([state_blob.bytesize].pack('L')) # 4-byte unsigned long header
+      f.write(state_blob)
+      f.write(@terms.pack('q*')) # 64-bit signed integers
+    end
   end
 
   def load_cache
     @terms = []
-    if File.exist?(terms_path)
+    path = cache_path
+    if File.exist?(path)
       begin
-        binary_data = File.binread(terms_path)
-        @terms = binary_data.unpack('q*') || []
-        
-        if File.exist?(state_path)
-          state = JSON.parse(File.read(state_path))
-          state.each do |var, val|
-            instance_variable_set(var, val)
-          end
+        File.open(path, 'rb') do |f|
+          # 1. Read Header
+          header_data = f.read(4)
+          return reset_state unless header_data
+          state_size = header_data.unpack1('L')
+          
+          # 2. Read and Restore State
+          state_blob = f.read(state_size)
+          state = Marshal.load(state_blob)
+          state.each { |var, val| instance_variable_set(var, val) }
+          
+          # 3. Read Terms
+          remaining_data = f.read
+          @terms = remaining_data.unpack('q*') if remaining_data
+          
           # Re-initialize the prime generator if it was being used
           if instance_variable_defined?(:@prime_gen)
             @prime_gen = Prime.each
@@ -90,7 +96,7 @@ class OEISSequence
           end
         end
       rescue => e
-        puts "Warning: Cache corrupted, resetting state. (#{e.message})"
+        puts "Warning: Cache for #{self.class} corrupted, resetting. (#{e.message})"
         reset_state
       end
     else

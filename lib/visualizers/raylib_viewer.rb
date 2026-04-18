@@ -43,7 +43,7 @@ class RaylibViewer
 
   def load_sequence_map
     map = {}
-    Dir.glob(File.join(__dir__, '..', '..', 'sequences', '**', '*.rb')).each do |file|
+    Dir.glob(File.join(__dir__, '..', '..', 'sequences', '*.rb')).each do |file|
       existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
       require_relative file
       new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }

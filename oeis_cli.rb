@@ -5,11 +5,11 @@ require_relative 'lib/sequence_template'
 $stdout.sync = true # Ensure all terminal output is shown instantly
 puts "OEIS Discovery Framework v#{OEIS::VERSION}"
 
-# Dynamically load sequence keys from the sequences/ directory
+# Dynamically load sequence keys from the flat sequences/ directory
 def load_sequences
   print "[1/3] Scanning sequence directory... "
   sequences = {}
-  Dir.glob(File.join(__dir__, 'sequences', '**', '*.rb')).each do |file|
+  Dir.glob(File.join(__dir__, 'sequences', '*.rb')).each do |file|
     key = File.basename(file, '.rb')
     sequences[key] = file
   end
@@ -134,7 +134,7 @@ def build_catalog(sequences)
   # 2. Update the Main CATALOG.md Index
   File.open("CATALOG.md", "w") do |f|
     f.puts "# OEIS Discovery Catalog"
-    f.puts "\nThis catalog is auto-generated and provides an index of all sequences implemented in this framework."
+    f.puts "\nThis catalog provides an index of all sequences implemented in this framework."
     
     ["High Potential", "Medium Potential", "Experimental"].each do |rank|
       f.puts "\n## #{rank} Sequences"
