@@ -50,58 +50,75 @@ class RaylibViewer
     end
     map
   end
+def sync_state
+  return unless File.exist?(STATE_FILE)
 
-  def sync_state
-    return unless File.exist?(STATE_FILE)
-    
-    begin
-      state = JSON.parse(File.read(STATE_FILE))
-    rescue
-      return
-    end
+  begin
+    state = JSON.parse(File.read(STATE_FILE))
+  rescue
+    return
+  end
 
-    return unless state && state['timestamp'] > @last_sync
-    
-    @last_sync = state['timestamp']
+  return unless state && state['timestamp'] > @last_sync
+
+  @last_sync = state['timestamp']
+
+  if state['key'] != @current_key || state['num_terms'] != @num_terms
+    @current_key = state['key']
     @num_terms = state['num_terms']
-    
-    if state['key'] != @current_key || @terms.size != @num_terms
-      @current_key = state['key']
-      @num_terms = state['num_terms']
-      klass = @sequences[@current_key]
-      if klass
-        @instance = klass.new
-        @terms = @instance.generate(@num_terms)
-        auto_fit_all()
-      end
+    klass = @sequences[@current_key]
+    if klass
+      @instance = klass.new
+      @terms = @instance.generate(@num_terms)
+      # Reset X-zoom/offset to show full sequence when it changes
+      auto_fit_x()
     end
   end
+end
 
-  def auto_fit_all
-    return if @terms.empty?
-    max_v = @terms.max
-    min_v = @terms.min
-    range_y = (max_v - min_v).to_f
-    range_y = 1.0 if range_y == 0
-    padding_y = 50.0 
-    @zoom_y = (900.0 - padding_y * 2) / range_y
-    @offset_y = padding_y + (max_v * @zoom_y)
+def auto_fit_x
+  return if @terms.empty?
+  padding_x = 50.0
+  @zoom_x = (1200.0 - padding_x * 2) / [@terms.size.to_f, 1].max
+  @offset_x = padding_x
+end
 
-    padding_x = 50.0
-    @zoom_x = (1200.0 - padding_x * 2) / [@terms.size.to_f, 1].max
-    @offset_x = padding_x
+def auto_fit_y_visible
+  return if @terms.nil? || @terms.empty?
+
+  # Calculate which indices are currently visible on screen
+  # x = offset_x + index * zoom_x
+  start_i = [((- @offset_x) / @zoom_x).floor, 0].max
+  end_i = [((1200.0 - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+
+  return if start_i >= @terms.size || end_i < 0
+
+  visible_slice = @terms[start_i..end_i]
+  return if visible_slice.nil? || visible_slice.empty?
+
+  max_v = visible_slice.max
+  min_v = visible_slice.min
+  range_y = (max_v - min_v).to_f
+  range_y = 1.0 if range_y == 0
+
+  padding_y = 50.0 
+  @zoom_y = (900.0 - padding_y * 2) / range_y
+  @offset_y = padding_y + (max_v * @zoom_y)
+end
+
+def run
+  InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
+  SetTargetFPS(60)
+
+  until WindowShouldClose()
+    sync_state()
+    auto_fit_y_visible() # Continuous Y scaling
+    update()
+    draw()
   end
 
-  def run
-    InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
-    SetTargetFPS(60)
-
-    until WindowShouldClose()
-      sync_state()
-      update()
-      draw()
-    end
-
+  CloseWindow()
+end
     CloseWindow()
   end
 
