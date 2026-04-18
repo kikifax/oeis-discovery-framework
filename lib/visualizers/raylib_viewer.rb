@@ -67,44 +67,46 @@ class RaylibViewer
     
     if state['key'] != @current_key || @terms.size != @num_terms
       @current_key = state['key']
+      @num_terms = state['num_terms']
       klass = @sequences[@current_key]
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
-        auto_fit_y
+        auto_fit_all()
       end
     end
   end
 
-  def auto_fit_y
+  def auto_fit_all
     return if @terms.empty?
     max_v = @terms.max
     min_v = @terms.min
-    range = (max_v - min_v).to_f
-    range = 1.0 if range == 0
-    
-    padding = 50.0 
-    drawable_height = 900.0 - (padding * 2)
-    
-    @zoom_y = drawable_height / range
-    @offset_y = padding + (max_v * @zoom_y)
+    range_y = (max_v - min_v).to_f
+    range_y = 1.0 if range_y == 0
+    padding_y = 50.0 
+    @zoom_y = (900.0 - padding_y * 2) / range_y
+    @offset_y = padding_y + (max_v * @zoom_y)
+
+    padding_x = 50.0
+    @zoom_x = (1200.0 - padding_x * 2) / [@terms.size.to_f, 1].max
+    @offset_x = padding_x
   end
 
   def run
     InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
-    until WindowShouldClose
-      sync_state
-      update
-      draw
+    until WindowShouldClose()
+      sync_state()
+      update()
+      draw()
     end
 
-    CloseWindow
+    CloseWindow()
   end
 
   def update
-    mx = GetMouseX.to_f
+    mx = GetMouseX().to_f
     
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       @dragging = true
@@ -118,7 +120,7 @@ class RaylibViewer
       @last_mouse_x = mx
     end
 
-    wheel = GetMouseWheelMove
+    wheel = GetMouseWheelMove()
     if wheel != 0
       factor = wheel > 0 ? 1.2 : 1.0/1.2
       @zoom_x *= factor
@@ -128,14 +130,12 @@ class RaylibViewer
     @zoom_x /= 1.02 if IsKeyDown(KEY_A)
     
     if IsKeyPressed(KEY_R)
-      @offset_x = 50.0
-      @zoom_x = 0.2
-      auto_fit_y
+      auto_fit_all()
     end
   end
 
   def draw
-    BeginDrawing
+    BeginDrawing()
     ClearBackground(RAYWHITE)
 
     DrawLine(0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY) 
@@ -159,9 +159,9 @@ class RaylibViewer
 
     name = @instance ? @instance.name : "None"
     DrawRectangle(0, 0, 1200, 30, Fade(SKYBLUE, 0.5))
-    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS}", 10, 5, 20, DARKBLUE)
+    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
 
-    EndDrawing
+    EndDrawing()
   end
 end
 

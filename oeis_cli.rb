@@ -199,26 +199,29 @@ when "explore"
   # We will use Threads to keep the console responsive
   threads = []
 
-  puts "[3/4] Launching Viewer..."
-  puts "\n🚀 OEIS Discovery Station is starting!"
-  puts ">> IMPORTANT: Press Ctrl+C here to close all windows."
+  puts "[3/4] Launching High-Performance Viewer..."
+  puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
 
-  # Start Dashboard in a thread
-  threads << Thread.new { system(dashboard_cmd) }
+  pids = []
+  begin
+    # Use spawn to get PIDs for reliable cleanup
+    pids << spawn(dashboard_cmd)
+    pids << spawn(viewer_cmd)
 
-  # Start Viewer in the main foreground
-  # This blocks the console and handles input correctly
-  system(viewer_cmd)
-
-  puts "\nExiting..."
-  # Clean up threads if any
-  threads.each(&:kill)
-
-  # Force-kill any lingering ruby processes from this project
-  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-    system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
-  end
-when "generate", "plot", "gui", "bfile", "analyze"
+    # Wait for the main viewer process
+    Process.wait(pids.last)
+  rescue Interrupt
+    puts "\nExiting OEIS Discovery Station..."
+  ensure
+    pids.each do |pid|
+      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+        # /T kills the child processes (like bundle/ruby) as well
+        system("taskkill /F /PID #{pid} /T >NUL 2>&1")
+      else
+        Process.kill("TERM", pid) rescue nil
+      end
+    end
+  endwhen "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]
     puts "Error: Sequence '#{key}' not found. Use 'ruby oeis_cli.rb list' to see available keys."
     exit 1
