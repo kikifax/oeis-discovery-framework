@@ -23,6 +23,9 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
+    puts ">>> STATION IDENTITY v1.5.14 <<<"
+    # Latency buffer
+    sleep 0.1
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -31,7 +34,7 @@ class RaylibExplorer
     @scroll_offset = 0.0
     @dragging = false
     @terms = []
-    @offset_x = (SIDEBAR_W + 50).to_f
+    @offset_x = (SIDEBAR_W + 60).to_f
     @offset_y = 450.0
     @zoom_x = 1.0
     @zoom_y = 1.0
@@ -40,25 +43,30 @@ class RaylibExplorer
 
   def safe_color(r, g, b, a=255)
     c = Raylib::Color.new
-    c[:r] = r; c[:g] = g; c[:b] = b; c[:a] = a
+    c[:r] = r
+    c[:g] = g
+    c[:b] = b
+    c[:a] = a
     c
   end
 
   def init_theme
     @bg_dark    = safe_color(20, 20, 24)
-    @sidebar_bg = safe_color(20, 80, 80) # DEEP TEAL (SYNC TEST)
+    @sidebar_bg = Raylib::MAGENTA # FINAL SYNC PROOF
     @accent     = safe_color(0, 180, 255)
-    @text_main  = safe_color(240, 240, 250)
-    @text_dim   = safe_color(160, 160, 180)
-    @color_white = safe_color(255, 255, 255)
-    @color_black = safe_color(0, 0, 0)
-    @color_gray  = safe_color(100, 100, 110)
-    @color_red   = safe_color(255, 50, 50)
+    @text_main  = Raylib::WHITE
+    @text_dim   = Raylib::LIGHTGRAY
+    @color_white = Raylib::WHITE
+    @color_black = Raylib::BLACK
+    @color_gray  = Raylib::GRAY
+    @color_red   = Raylib::RED
 
     win_f = "C:\\Windows\\Fonts\\arial.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 96, nil, 0)
-      SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR) if @font
+      if @font && @font.texture.id > 0
+        SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR)
+      end
     end
     @font ||= GetFontDefault()
   end
@@ -73,7 +81,9 @@ class RaylibExplorer
           display: "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}" }
       end
       data.sort_by { |s| -(s[:score] || 0) }
-    rescue; []; end
+    rescue
+      []
+    end
   end
 
   def load_sequence_class(file)
@@ -84,7 +94,9 @@ class RaylibExplorer
       key = File.basename(file, '.rb').gsub('_','')
       klass = new_c.find { |c| c.to_s.downcase.include?(key) }
       klass || (new_c - existing).first
-    rescue; nil; end
+    rescue
+      nil
+    end
   end
 
   def load_sequence(key)
@@ -97,10 +109,11 @@ class RaylibExplorer
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
         auto_fit_all()
-        puts "[Station] Loaded #{key}"
+        puts "[Station] Synchronized #{key}"
         STDOUT.flush
       end
-    rescue; end
+    rescue
+    end
   end
 
   def auto_fit_all
@@ -112,8 +125,8 @@ class RaylibExplorer
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 260.0) / range_y
     @offset_y = 110.0 + (max_v * @zoom_y)
-    @zoom_x = (w - SIDEBAR_W - 120.0) / [@terms.size.to_f, 1.0].max
-    @offset_x = (SIDEBAR_W + 60).to_f
+    @zoom_x = (w - SIDEBAR_W - 140.0) / [@terms.size.to_f, 1.0].max
+    @offset_x = (SIDEBAR_W + 70).to_f
   end
 
   def draw_text_safe(text, x, y, size, color)
@@ -124,16 +137,24 @@ class RaylibExplorer
 
   def update
     if IsKeyPressed(KEY_T)
-      @edit_mode = true; @input_text = ""; return
+      @edit_mode = true
+      @input_text = ""
+      return
     end
 
     if @edit_mode
       char = GetCharPressed()
       while char > 0
-        @input_text << char.chr if (char >= 48) && (char <= 57)
+        if (char >= 48) && (char <= 57)
+          @input_text << char.chr
+        end
         char = GetCharPressed()
       end
-      @input_text = @input_text[0...-1] if IsKeyPressed(KEY_BACKSPACE) && @input_text.length > 0
+      if IsKeyPressed(KEY_BACKSPACE)
+        if @input_text.length > 0
+          @input_text = @input_text[0...-1]
+        end
+      end
       if IsKeyPressed(KEY_ENTER)
         if @input_text.to_i > 10
           @num_terms = @input_text.to_i
@@ -146,47 +167,73 @@ class RaylibExplorer
       return
     end
 
-    mx, my = GetMouseX(), GetMouseY()
+    mx = GetMouseX()
+    my = GetMouseY()
 
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       if mx < SIDEBAR_W
         list_y = 100.0 + @scroll_offset
         @sequences.each_with_index do |s, i|
           if my >= list_y && my < list_y + 35
-            @current_idx = i; load_sequence(s[:key]); break
+            @current_idx = i
+            load_sequence(s[:key])
+            break
           end
           list_y += 35
         end
       else
-        @dragging = true; @last_mx = mx.to_f
+        @dragging = true
+        @last_mx = mx.to_f
       end
-    elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
+    elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
+      @dragging = false
+    end
 
-    if @dragging; @offset_x += (mx.to_f - @last_mx); @last_mx = mx.to_f; end
+    if @dragging
+      @offset_x += (mx.to_f - @last_mx)
+      @last_mx = mx.to_f
+    end
 
     wheel = GetMouseWheelMove()
     if wheel != 0
       if mx < SIDEBAR_W
         @scroll_offset += (wheel * 50)
-        # Allow scrolling much further down
-        max_scroll = -(@sequences.size * 35 - 300)
-        @scroll_offset = [[@scroll_offset, 0.0].min, max_scroll].max
+        if @scroll_offset > 0
+          @scroll_offset = 0.0
+        end
       else
-        @zoom_x *= (wheel > 0 ? 1.2 : 0.8)
+        if wheel > 0
+          @zoom_x *= 1.2
+        else
+          @zoom_x *= 0.8
+        end
       end
     end
     
-    auto_fit_all() if IsKeyPressed(KEY_R)
+    if IsKeyPressed(KEY_R)
+      auto_fit_all()
+    end
+    
+    if IsKeyPressed(KEY_UP)
+      @num_terms += 500
+      load_sequence(@sequences[@current_idx][:key])
+    elsif IsKeyPressed(KEY_DOWN)
+      if @num_terms > 500
+        @num_terms -= 500
+        load_sequence(@sequences[@current_idx][:key])
+      end
+    end
   end
 
   def draw
     BeginDrawing()
     ClearBackground(@bg_dark)
-    w, h = GetScreenWidth(), GetScreenHeight()
+    w = GetScreenWidth()
+    h = GetScreenHeight()
 
-    # --- GRAPH ---
     DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, @color_gray)
     DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, @color_gray)
+
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
@@ -198,13 +245,11 @@ class RaylibExplorer
       end
     end
 
-    # --- SIDEBAR ---
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    draw_text_safe("STATION V1.5.13", 30, 30, 24, @color_black)
+    draw_text_safe("STATION v1.5.14", 30, 30, 24, @color_black)
 
-    # Scissor is now dynamically calculated to reach bottom
-    scissor_h = [h - 110, 10].max
-    BeginScissorMode(0, 90, SIDEBAR_W, scissor_h.to_i)
+    sh = [h - 150, 10].max
+    BeginScissorMode(0, 90, SIDEBAR_W, sh.to_i)
       list_y = 100.0 + @scroll_offset
       @sequences.each_with_index do |s, i|
         if i == @current_idx
@@ -227,13 +272,16 @@ class RaylibExplorer
 
   def run
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT)
-    InitWindow(1600, 950, "STATION v1.5.13 (TEAL)")
+    InitWindow(1600, 950, "STATION-v1.5.14-SYNCED")
     SetTargetFPS(60)
     init_theme()
     if @sequences.any?
       load_sequence(@sequences[0][:key])
     end
-    until WindowShouldClose(); update(); draw(); end
+    until WindowShouldClose()
+      update()
+      draw()
+    end
     CloseWindow()
   end
 end
