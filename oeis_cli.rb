@@ -61,10 +61,16 @@ def build_catalog(sequences)
   catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
   
   catalog_data = []
+  
+  # CRITICAL FIX: Load all classes once into a lookup table to avoid 'require' nil issues
+  class_map = {}
+  sequences.each do |key, file|
+    class_map[key] = load_sequence_class(file)
+  end
 
   # 1. Update Individual Sequence Docs
-  sequences.each do |key, file|
-    klass = load_sequence_class(file)
+  class_map.each do |key, klass|
+    next unless klass
     instance = klass.new
     doc_path = File.join(docs_dir, "#{key}.md")
     
@@ -78,7 +84,7 @@ def build_catalog(sequences)
     # Use cached score if available, otherwise analyze
     cached = catalog_map[key]
     if cached && existing_version >= DOCUMENTER_VERSION
-      report = { fitness_score: cached['fitness_score'], stats: { terms: 1000 } } # dummy report for doc
+      report = { fitness_score: cached['fitness_score'], stats: { terms: 1000 } }
       catalog_data << cached
     else
       puts "Analyzing #{key}..."
@@ -94,7 +100,6 @@ def build_catalog(sequences)
 
     if existing_version < DOCUMENTER_VERSION
       puts "Updating documentation for #{key}..."
-      # ... (rest of doc generation code)
       
       File.open(doc_path, "w") do |f|
         f.puts "Doc Version: #{DOCUMENTER_VERSION}"
@@ -136,8 +141,10 @@ def build_catalog(sequences)
       f.puts "\n| Name | Formula | Doc |"
       f.puts "| :--- | :--- | :--- |"
       
-      sequences.sort.each do |key, file|
-        klass = load_sequence_class(file)
+      # Use class_map instead of reloading
+      class_map.keys.sort.each do |key|
+        klass = class_map[key]
+        next unless klass
         instance = klass.new
         next unless instance.rank == rank
         f.puts "| #{instance.name} | `#{instance.formula}` | [View Full Report](docs/sequences/#{key}.md) |"
