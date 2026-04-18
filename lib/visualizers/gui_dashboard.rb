@@ -114,7 +114,10 @@ class GUIDashboard
         }
       }
       
-      on_closing { File.write(STATE_FILE, {exit: true, timestamp: Time.now.to_f}.to_json) rescue nil }
+      on_closing do
+        File.delete(".cache/station.lock") rescue nil
+        File.write(STATE_FILE, {exit: true, timestamp: Time.now.to_f}.to_json) rescue nil
+      end
     }.show
     update_doc_display(@sequences[@current_display_name][:key])
   end
