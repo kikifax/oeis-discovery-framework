@@ -7,6 +7,11 @@ GEM
     color (1.8)
     equalizer (0.0.11)
     facets (3.1.0)
+    ffi (1.17.4)
+    ffi (1.17.4-arm64-darwin)
+    ffi (1.17.4-x64-mingw-ucrt)
+    ffi (1.17.4-x86_64-darwin)
+    ffi (1.17.4-x86_64-linux-gnu)
     forwardable (1.4.0)
     glimmer (2.8.2)
       array_include_methods (>= 1.4.0, < 1.6.0)
@@ -46,6 +51,16 @@ GEM
     rake (13.4.2)
     rake-tui (0.2.3)
       tty-prompt
+    raylib-bindings (0.7.18)
+      ffi (~> 1.16)
+    raylib-bindings (0.7.18-arm64-darwin)
+      ffi (~> 1.16)
+    raylib-bindings (0.7.18-x64-mingw)
+      ffi (~> 1.16)
+    raylib-bindings (0.7.18-x86_64-darwin)
+      ffi (~> 1.16)
+    raylib-bindings (0.7.18-x86_64-linux)
+      ffi (~> 1.16)
     rouge (3.30.0)
     singleton (0.3.0)
     super_module (1.4.2)
@@ -74,6 +89,7 @@ DEPENDENCIES
   glimmer-dsl-libui
   json
   prime
+  raylib-bindings
 
 CHECKSUMS
   array_include_methods (1.5.1) sha256=c29e905b8511814e8f488ce1a219bb5638a8f5fa88af215a95f95da610bff0ce
@@ -82,6 +98,11 @@ CHECKSUMS
   color (1.8) sha256=0a8512ecf6a8fe14928707f7d2766680c955b3a2224de198c1e25c837cd36f82
   equalizer (0.0.11) sha256=44e5bc46f49883e83d159ee9b1f7320b4ae8283bb6329e5d9716f5e7dde855ce
   facets (3.1.0) sha256=7834a68824efbb35380ed7f6f590e01fb9a31a9466e317210e8803f72813c345
+  ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
+  ffi (1.17.4-arm64-darwin) sha256=19071aaf1419251b0a46852abf960e77330a3b334d13a4ab51d58b31a937001b
+  ffi (1.17.4-x64-mingw-ucrt) sha256=f6ff9618cfccc494138bddade27aa06c74c6c7bc367a1ea1103d80c2fcb9ed35
+  ffi (1.17.4-x86_64-darwin) sha256=aa70390523cf3235096cf64962b709b4cfbd5c082a2cb2ae714eb0fe2ccda496
+  ffi (1.17.4-x86_64-linux-gnu) sha256=9d3db14c2eae074b382fa9c083fe95aec6e0a1451da249eab096c34002bc752d
   forwardable (1.4.0) sha256=f1cd40cc9812937980e1c76f1aa053660990a7c9b6a98fc37d945468afcce838
   glimmer (2.8.2) sha256=b1ae9e3e1c7f5da7907c065f8b21a4f092be019d2971cda7f80c73791b65c124
   glimmer-dsl-libui (0.13.1) sha256=0009e312a1723fa756584035473b24c0991322735a0c2d8b689f5e71ca457e95
@@ -99,6 +120,11 @@ CHECKSUMS
   puts_debuggerer (1.0.1) sha256=846a807d645bba93d609c957fb5f5efee4ec84319d73b3b75beba75bd67abf4b
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
   rake-tui (0.2.3) sha256=bc8c942b2993dc5d2a7103823533b880687e27e314fa5fe99471f849f0d9785e
+  raylib-bindings (0.7.18) sha256=fbcceba7916353c183d39d2febffc8d123229d15189ccdb531795a9ef3a9b626
+  raylib-bindings (0.7.18-arm64-darwin) sha256=ce52f7ec098ec701c5aca9feb34a5d9e51bd1478ce45d378e6868ea243eff1fc
+  raylib-bindings (0.7.18-x64-mingw) sha256=bba58ae01d12bf31890c88482f8155b8e9fd6d46718d3f0243b00ce83bb45cea
+  raylib-bindings (0.7.18-x86_64-darwin) sha256=1f346e6ce53b8db81b3ce2c979bfaef50ef1126900a11c7aa9001b10855a1082
+  raylib-bindings (0.7.18-x86_64-linux) sha256=cda887912daf74b559f9af91eaad7ed0d1096dce84e462d56a2698a375a1b2e0
   rouge (3.30.0) sha256=a3d353222aa72e49e2c86726c0bcfd719f82592f57d494474655f48e669eceb6
   singleton (0.3.0) sha256=83ea1bca5f4aa34d00305ab842a7862ea5a8a11c73d362cb52379d94e9615778
   super_module (1.4.2) sha256=50172eefea196d3f7513e6c0c5856048a462087a8232d144a5f8680651b7dfe0

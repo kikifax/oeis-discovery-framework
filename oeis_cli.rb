@@ -124,6 +124,7 @@ OptionParser.new do |opts|
     puts "  analyze <key> <n>   Perform statistical analysis and fitness scoring"
     puts "  plot <key> <n>      Launch terminal plotter for first n terms"
     puts "  gui <key> <n>       Launch graphical explorer for first n terms"
+    puts "  explore             Launch high-performance GPU visualizer"
     puts "  bfile <key> <n>     Generate a b-file in b_files/ directory"
     puts "  build-catalog     Auto-generate CATALOG.md"
     exit
@@ -139,6 +140,20 @@ when "list"
   list_sequences(sequences)
 when "build-catalog"
   build_catalog(sequences)
+when "explore"
+  # Launch the Dashboard in the background
+  dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
+  viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
+  
+  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+    # Windows: Use start to background the process
+    system "start /B #{dashboard_cmd}"
+    system viewer_cmd
+  else
+    # Linux/Mac: Use & to background
+    spawn(dashboard_cmd)
+    system viewer_cmd
+  end
 when "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]
     puts "Error: Sequence '#{key}' not found. Use 'ruby oeis_cli.rb list' to see available keys."
