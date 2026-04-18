@@ -13,12 +13,15 @@ when /darwin/
   Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.dylib")
 when /linux/
   arch = RUBY_PLATFORM.split('-')[0]
-  Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.so")
+  lib_file = shared_lib_path + "libraylib.#{arch}.so"
+  unless File.exist?(lib_file)
+    puts "ERROR: Raylib library not found at #{lib_file}"
+    exit(1)
+  end
+  Raylib.load_lib(lib_file)
 end
 
 class RaylibViewer
-  include Raylib
-
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
   
   def initialize
@@ -26,7 +29,6 @@ class RaylibViewer
     @num_terms = -1
     @last_version = -1
     @terms = []
-    @last_sync = 0.0
     
     # View State
     @offset_x = 0.0
@@ -41,17 +43,19 @@ class RaylibViewer
     $stdout.sync = true
   end
 
+  def load_sequence_class(file)
+    existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+    require file
+    new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+    (new_classes - existing_classes).first
+  end
+
   def load_sequence_map
     map = {}
     Dir.glob(File.join(Dir.pwd, 'sequences', '*.rb')).each do |file|
       key = File.basename(file, '.rb')
-      class_name = key.split('_').map(&:capitalize).join
-      begin
-        require file
-        map[key] = Object.const_get(class_name)
-      rescue => e
-        puts "Error loading #{key}: #{e.message}"
-      end
+      klass = load_sequence_class(file)
+      map[key] = klass if klass
     end
     map
   end
@@ -70,7 +74,7 @@ class RaylibViewer
     @last_version = new_v
 
     if state['exit']
-      CloseWindow()
+      Raylib.CloseWindow()
       exit(0)
     end
     
@@ -91,8 +95,8 @@ class RaylibViewer
   def auto_fit_all
     return if @terms.empty?
     
-    w = GetScreenWidth().to_f
-    h = GetScreenHeight().to_f
+    w = Raylib.GetScreenWidth().to_f
+    h = Raylib.GetScreenHeight().to_f
     
     max_v = @terms.max
     min_v = @terms.min
@@ -110,8 +114,8 @@ class RaylibViewer
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
-    w = GetScreenWidth().to_f
-    h = GetScreenHeight().to_f
+    w = Raylib.GetScreenWidth().to_f
+    h = Raylib.GetScreenHeight().to_f
     
     start_i = [((- @offset_x) / @zoom_x).floor, 0].max
     end_i = [((w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
@@ -129,43 +133,43 @@ class RaylibViewer
   end
 
   def run
-    InitWindow(1600, 950, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
-    SetTargetFPS(60)
+    Raylib.InitWindow(1600, 950, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
+    Raylib.SetTargetFPS(60)
 
-    until WindowShouldClose()
+    until Raylib.WindowShouldClose()
       sync_state()
-      auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
+      auto_fit_y_visible() unless Raylib.IsMouseButtonDown(Raylib::MOUSE_BUTTON_LEFT) || Raylib.GetMouseWheelMove() != 0
       update()
       draw()
     end
-    CloseWindow()
+    Raylib.CloseWindow()
   end
 
   def update
-    mx = GetMouseX().to_f
-    if IsMouseButtonPressed(MOUSE_BUTTON_LEFT); @dragging = true; @last_mouse_x = mx; end
-    if IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
+    mx = Raylib.GetMouseX().to_f
+    if Raylib.IsMouseButtonPressed(Raylib::MOUSE_BUTTON_LEFT); @dragging = true; @last_mouse_x = mx; end
+    if Raylib.IsMouseButtonReleased(Raylib::MOUSE_BUTTON_LEFT); @dragging = false; end
 
     if @dragging
       @offset_x += (mx - @last_mouse_x)
       @last_mouse_x = mx
     end
 
-    wheel = GetMouseWheelMove()
+    wheel = Raylib.GetMouseWheelMove()
     @zoom_x *= (wheel > 0 ? 1.2 : 0.8) if wheel != 0
-    auto_fit_all() if IsKeyPressed(KEY_R)
+    auto_fit_all() if Raylib.IsKeyPressed(Raylib::KEY_R)
   end
 
   def draw
-    BeginDrawing()
-    ClearBackground(RAYWHITE)
+    Raylib.BeginDrawing()
+    Raylib.ClearBackground(Raylib::RAYWHITE)
     
-    w = GetScreenWidth().to_f
-    h = GetScreenHeight().to_f
+    w = Raylib.GetScreenWidth().to_f
+    h = Raylib.GetScreenHeight().to_f
 
-    # Grid (Use pre-defined LIGHTGRAY)
-    DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, LIGHTGRAY)
+    # Grid
+    Raylib.DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, Raylib::LIGHTGRAY) 
+    Raylib.DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, Raylib::LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
@@ -176,16 +180,16 @@ class RaylibViewer
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
         
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
+        Raylib.DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, Raylib::BLUE)
       end
     end
 
     # Status Bar
-    DrawRectangle(0, 0, w.to_i, 35, Fade(SKYBLUE, 0.5))
+    Raylib.DrawRectangle(0, 0, w.to_i, 35, Raylib.Fade(Raylib::SKYBLUE, 0.5))
     name = @instance ? @instance.name : "None"
-    DrawText("#{name} | Terms: #{@num_terms}", 15, 8, 20, DARKBLUE)
+    Raylib.DrawText("#{name} | Terms: #{@num_terms}", 15, 8, 20, Raylib::DARKBLUE)
 
-    EndDrawing()
+    Raylib.EndDrawing()
   end
 end
 
