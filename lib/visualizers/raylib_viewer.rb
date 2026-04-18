@@ -20,6 +20,8 @@ class RaylibViewer
   include Raylib
 
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
+  WIN_W = 1600
+  WIN_H = 900
 
   def initialize
     @current_key = nil
@@ -62,17 +64,17 @@ class RaylibViewer
 
     return unless state && state['timestamp'] > @last_sync
     
-    # Check for exit signal from Dashboard
+    # Update Sync Timestamp
+    @last_sync = state['timestamp']
+
     if state['exit']
-      puts "Exit signal received. Closing viewer..."
       CloseWindow()
       exit(0)
     end
     
-    @last_sync = state['timestamp']
-    
+    # If key OR term count changed, we need a hard re-fit
     if state['key'] != @current_key || state['num_terms'] != @num_terms
-      puts "Syncing: #{state['key']} (#{state['num_terms']} terms)"
+      puts "Re-Scaling: #{state['key']} for #{state['num_terms']} terms..."
       @current_key = state['key']
       @num_terms = state['num_terms']
       
@@ -80,8 +82,6 @@ class RaylibViewer
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
-        
-        # RESET VIEW TO FIT NEW DATA LENGTH
         auto_fit_all()
       end
     end
@@ -96,23 +96,25 @@ class RaylibViewer
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
     padding_y = 60.0 
-    @zoom_y = (900.0 - padding_y * 2) / range_y
+    @zoom_y = (WIN_H - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
 
-    # 2. X-Fit (Full length) - MUST USE ACTUAL TERMS SIZE
+    # 2. X-Fit (Full length)
     padding_x = 50.0
-    @zoom_x = (1200.0 - padding_x * 2) / [@terms.size.to_f, 1].max
+    @zoom_x = (WIN_W - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
+    
+    puts "View Synced. ZoomX: #{@zoom_x.round(4)}, OffsetX: #{@offset_x}"
   end
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
     
-    # Only auto-scale Y based on visible if we have data
+    # Find start and end index visible in the window (accounting for sidebar area if any)
     start_i = [((- @offset_x) / @zoom_x).floor, 0].max
-    end_i = [((1200.0 - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+    end_i = [((WIN_W - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
     
-    return if start_i >= @terms.size || end_i < 0
+    return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
     
     visible_slice = @terms[start_i..end_i]
     return if visible_slice.nil? || visible_slice.empty?
@@ -123,17 +125,17 @@ class RaylibViewer
     range_y = 1.0 if range_y == 0
     
     padding_y = 60.0 
-    @zoom_y = (900.0 - padding_y * 2) / range_y
+    @zoom_y = (WIN_H - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
   end
 
   def run
-    InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
+    InitWindow(WIN_W, WIN_H, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
     until WindowShouldClose()
       sync_state()
-      # If the user isn't actively panning/zooming, keep Y fitted
+      # Only auto-scale Y visible if we are NOT dragging or zooming
       auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
       update()
       draw()
@@ -176,14 +178,14 @@ class RaylibViewer
     ClearBackground(RAYWHITE)
 
     # Draw Axes
-    DrawLine(0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY)
+    DrawLine(0, @offset_y.to_i, WIN_W, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, WIN_H, LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
         x2 = @offset_x + i * @zoom_x
-        next if x2 < 0 || x1 > 1200
+        next if x2 < 0 || x1 > WIN_W
         
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
@@ -196,7 +198,7 @@ class RaylibViewer
     end
 
     name = @instance ? @instance.name : "None"
-    DrawRectangle(0, 0, 1200, 30, Fade(SKYBLUE, 0.5))
+    DrawRectangle(0, 0, WIN_W, 30, Fade(SKYBLUE, 0.5))
     DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
 
     EndDrawing()
