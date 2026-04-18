@@ -188,8 +188,9 @@ when "explore"
   puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
   pids = []
   begin
-    pids << spawn(dashboard_cmd)
-    pids << spawn(viewer_cmd)
+    # Use explicit IO redirection to ensure output is visible in the console
+    pids << spawn(dashboard_cmd, out: :out, err: :err)
+    pids << spawn(viewer_cmd, out: :out, err: :err)
     
     # Wait for BOTH processes in separate threads
     t1 = Thread.new { Process.wait(pids[0]) rescue nil }

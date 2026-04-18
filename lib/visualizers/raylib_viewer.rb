@@ -23,11 +23,11 @@ class RaylibViewer
 
   def initialize
     @current_key = nil
-    @num_terms = -1 # Start at -1 to force first sync
-    @last_sync = 0.0
+    @num_terms = 0
+    @last_mtime = 0.0
     @terms = []
     
-    # View State (will be set by auto_fit)
+    # Viewport defaults
     @offset_x = 0.0
     @offset_y = 0.0
     @zoom_x = 1.0
@@ -37,6 +37,7 @@ class RaylibViewer
     @last_mouse_x = 0.0
 
     @sequences = load_sequence_map
+    $stdout.sync = true # Ensure logs appear
   end
 
   def load_sequence_map
@@ -54,97 +55,95 @@ class RaylibViewer
   def sync_state
     return unless File.exist?(STATE_FILE)
     
+    mtime = File.mtime(STATE_FILE).to_f
+    return if mtime <= @last_mtime
+    @last_mtime = mtime
+
     begin
       state = JSON.parse(File.read(STATE_FILE))
     rescue
       return
     end
 
-    # Only sync if timestamp is new
-    return unless state && state['timestamp'].to_f > @last_sync
-    @last_sync = state['timestamp'].to_f
-
     if state['exit']
+      puts "Exit signal received."
       CloseWindow()
       exit(0)
     end
     
-    new_key = state['key'].to_s
-    new_num = state['num_terms'].to_i
+    key = state['key'].to_s
+    num = state['num_terms'].to_i
     
-    # If key OR term count changed, we need a hard re-fit
-    if new_key != @current_key || new_num != @num_terms
-      puts "Syncing Data: #{new_key} (#{new_num} terms)"
-      @current_key = new_key
-      @num_terms = new_num
+    # Force load data
+    klass = @sequences[key]
+    if klass
+      puts "Syncing: #{key} for #{num} terms..."
+      @current_key = key
+      @num_terms = num
+      @instance = klass.new
+      @terms = @instance.generate(@num_terms)
       
-      klass = @sequences[@current_key]
-      if klass
-        @instance = klass.new
-        @terms = @instance.generate(@num_terms)
-        auto_fit_all()
-      end
+      # RELIABLE AUTO-FIT: Triggered once per sync
+      auto_fit_all()
     end
   end
 
   def auto_fit_all
     return if @terms.nil? || @terms.empty?
     
-    win_w = GetScreenWidth().to_f
-    win_h = GetScreenHeight().to_f
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
     
-    # 1. Y-Fit (Full range)
     max_v = @terms.max
     min_v = @terms.min
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
-    padding_y = 80.0 
-    @zoom_y = (win_h - padding_y * 2) / range_y
+    
+    padding_y = 100.0 
+    @zoom_y = (h - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
 
-    # 2. X-Fit (Full length)
     padding_x = 50.0
-    @zoom_x = (win_w - padding_x * 2) / [@terms.size.to_f, 1].max
+    @zoom_x = (w - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
     
-    puts "View Synced. Width: #{win_w}, ZoomX: #{@zoom_x.round(4)}"
+    puts "View Synced: range [#{min_v}, #{max_v}] fit to #{h}px height."
   end
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
     
-    win_w = GetScreenWidth().to_f
-    win_h = GetScreenHeight().to_f
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
     
-    # Find start and end index visible in the window
     start_i = [((- @offset_x) / @zoom_x).floor, 0].max
-    end_i = [((win_w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+    end_i = [((w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
     
     return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
     
-    visible_slice = @terms[start_i..end_i]
-    return if visible_slice.nil? || visible_slice.empty?
+    slice = @terms[start_i..end_i]
+    return if slice.nil? || slice.empty?
     
-    max_v = visible_slice.max
-    min_v = visible_slice.min
+    max_v = slice.max
+    min_v = slice.min
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
     
-    padding_y = 80.0 
-    @zoom_y = (win_h - padding_y * 2) / range_y
+    padding_y = 100.0 
+    @zoom_y = (h - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
   end
 
   def run
-    # Set config flags for resizable window
     SetConfigFlags(FLAG_WINDOW_RESIZABLE)
     InitWindow(1600, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
     until WindowShouldClose()
       sync_state()
-      # Only auto-scale Y visible if we are NOT dragging or zooming
+      # Only dynamic Y-scale if NOT dragging
       auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
+      
       update()
       draw()
     end
@@ -176,41 +175,35 @@ class RaylibViewer
     @zoom_x *= 1.02 if IsKeyDown(KEY_D)
     @zoom_x /= 1.02 if IsKeyDown(KEY_A)
     
-    if IsKeyPressed(KEY_R)
-      auto_fit_all()
-    end
+    auto_fit_all() if IsKeyPressed(KEY_R)
   end
 
   def draw
     BeginDrawing()
     ClearBackground(RAYWHITE)
     
-    win_w = GetScreenWidth().to_f
-    win_h = GetScreenHeight().to_f
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
 
-    # Draw Axes
-    DrawLine(0, @offset_y.to_i, win_w.to_i, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, win_h.to_i, LIGHTGRAY)
+    DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
         x2 = @offset_x + i * @zoom_x
-        next if x2 < 0 || x1 > win_w
+        next if x2 < 0 || x1 > w
         
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
         
         DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
-        if @zoom_x > 8.0
-          DrawCircle(x1.to_i, y1.to_i, 2, MAROON)
-        end
+        DrawCircle(x1.to_i, y1.to_i, 2, MAROON) if @zoom_x > 10.0
       end
     end
 
-    # Overlay
-    name = @instance ? @instance.name : "None"
-    DrawRectangle(0, 0, win_w.to_i, 30, Fade(SKYBLUE, 0.5))
+    name = @instance ? @instance.name : "Waiting for Dashboard..."
+    DrawRectangle(0, 0, w.to_i, 30, Fade(SKYBLUE, 0.5))
     DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
 
     EndDrawing()
