@@ -179,31 +179,30 @@ when "list"
 when "build-catalog"
   build_catalog(sequences, force: true)
 when "explore"
-  puts "[1/4] Checking metadata cache..."
+  # Reset state on start
+  File.delete('.cache/gui_state.json') rescue nil
+
+  puts "[1/3] Syncing metadata..."
   build_catalog(sequences)
+
+  puts "[2/3] Preparing windows..."
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
-  puts "[2/4] Initializing Dashboard..."
-  puts "[3/4] Launching Viewer..."
-  puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
+
+  puts "[3/3] Launching Discovery Station..."
+  puts "\n🚀 Discovery Station active! v#{OEIS::VERSION}"
+  puts ">> Press Ctrl+C in this console to exit."
+
   pids = []
   begin
-    # Use explicit IO redirection to ensure output is visible in the console
-    pids << spawn(dashboard_cmd, out: :out, err: :err)
-    pids << spawn(viewer_cmd, out: :out, err: :err)
-    
-    # Wait for BOTH processes in separate threads
-    t1 = Thread.new { Process.wait(pids[0]) rescue nil }
-    t2 = Thread.new { Process.wait(pids[1]) rescue nil }
-    
-    # Block the main thread until either sub-process exits
-    loop do
-      break unless t1.alive? && t2.alive?
-      sleep 0.1
-    end
-    
+    # Spawn both sharing the console explicitly
+    pids << Process.spawn(dashboard_cmd, :out => :out, :err => :err)
+    pids << Process.spawn(viewer_cmd, :out => :out, :err => :err)
+
+    # Wait for the viewer primarily
+    Process.wait(pids.last)
   rescue Interrupt
-    puts "\nInterrupt received. Cleaning up..."
+    puts "\nShutting down..."
   ensure
     pids.each do |pid|
       if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
@@ -212,7 +211,6 @@ when "explore"
         Process.kill("TERM", pid) rescue nil
       end
     end
-    puts "OEIS Discovery Station shutdown complete."
   end
 when "analyze"
   if sequences[key]

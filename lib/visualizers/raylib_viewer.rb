@@ -20,14 +20,19 @@ class RaylibViewer
   include Raylib
 
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
+  
+  # IRONCLAD DIMENSIONS: Don't trust the driver during init
+  BASE_W = 1600.0
+  BASE_H = 900.0
 
   def initialize
     @current_key = nil
     @num_terms = 0
-    @last_mtime = 0.0
+    @last_version = -1
     @terms = []
+    @status = "Waiting for Sync..."
     
-    # Viewport defaults
+    # View State
     @offset_x = 0.0
     @offset_y = 0.0
     @zoom_x = 1.0
@@ -37,7 +42,7 @@ class RaylibViewer
     @last_mouse_x = 0.0
 
     @sequences = load_sequence_map
-    $stdout.sync = true # Ensure logs appear
+    $stdout.sync = true
   end
 
   def load_sequence_map
@@ -55,18 +60,18 @@ class RaylibViewer
   def sync_state
     return unless File.exist?(STATE_FILE)
     
-    mtime = File.mtime(STATE_FILE).to_f
-    return if mtime <= @last_mtime
-    @last_mtime = mtime
-
     begin
       state = JSON.parse(File.read(STATE_FILE))
     rescue
-      return
+      return # File might be locked
     end
 
+    # SYNC BY VERSION: 100% reliable
+    new_version = state['version'].to_i
+    return if new_version <= @last_version
+    @last_version = new_version
+
     if state['exit']
-      puts "Exit signal received."
       CloseWindow()
       exit(0)
     end
@@ -74,16 +79,16 @@ class RaylibViewer
     key = state['key'].to_s
     num = state['num_terms'].to_i
     
-    # Force load data
     klass = @sequences[key]
     if klass
-      puts "Syncing: #{key} for #{num} terms..."
+      @status = "Syncing: #{key} (#{num} terms)"
+      puts @status
       @current_key = key
       @num_terms = num
       @instance = klass.new
       @terms = @instance.generate(@num_terms)
       
-      # RELIABLE AUTO-FIT: Triggered once per sync
+      # FORCE SCALE
       auto_fit_all()
     end
   end
@@ -91,28 +96,27 @@ class RaylibViewer
   def auto_fit_all
     return if @terms.nil? || @terms.empty?
     
-    w = GetScreenWidth().to_f
-    h = GetScreenHeight().to_f
-    
+    # Use BASE_W/BASE_H for guaranteed math
     max_v = @terms.max
     min_v = @terms.min
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
     
     padding_y = 100.0 
-    @zoom_y = (h - padding_y * 2) / range_y
+    @zoom_y = (BASE_H - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
 
-    padding_x = 50.0
-    @zoom_x = (w - padding_x * 2) / [@terms.size.to_f, 1].max
+    padding_x = 60.0
+    @zoom_x = (BASE_W - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
     
-    puts "View Synced: range [#{min_v}, #{max_v}] fit to #{h}px height."
+    @status = "Synced: ZoomX=#{@zoom_x.round(2)}"
   end
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
     
+    # Dynamic Y scaling based on current window width
     w = GetScreenWidth().to_f
     h = GetScreenHeight().to_f
     
@@ -135,13 +139,13 @@ class RaylibViewer
   end
 
   def run
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
-    InitWindow(1600, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
+    # FLAG_WINDOW_HIGHDPI can cause width issues, so we leave it off for now
+    InitWindow(BASE_W.to_i, BASE_H.to_i, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
     until WindowShouldClose()
       sync_state()
-      # Only dynamic Y-scale if NOT dragging
+      # Auto-scale Y visible if not actively manipulating
       auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
       
       update()
@@ -182,9 +186,11 @@ class RaylibViewer
     BeginDrawing()
     ClearBackground(RAYWHITE)
     
+    # Real-time window metrics
     w = GetScreenWidth().to_f
     h = GetScreenHeight().to_f
 
+    # Draw Axes
     DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, LIGHTGRAY) 
     DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, LIGHTGRAY)
 
@@ -198,13 +204,14 @@ class RaylibViewer
         y2 = @offset_y - @terms[i] * @zoom_y
         
         DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
-        DrawCircle(x1.to_i, y1.to_i, 2, MAROON) if @zoom_x > 10.0
       end
     end
 
-    name = @instance ? @instance.name : "Waiting for Dashboard..."
-    DrawRectangle(0, 0, w.to_i, 30, Fade(SKYBLUE, 0.5))
-    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
+    # Top Status Bar
+    name = @instance ? @instance.name : "Waiting..."
+    DrawRectangle(0, 0, w.to_i, 35, Fade(SKYBLUE, 0.8))
+    DrawText("#{name} | Terms: #{@num_terms} | #{@status}", 15, 8, 20, DARKBLUE)
+    DrawText("FPS: #{GetFPS()}", w.to_i - 80, 10, 15, DARKGRAY)
 
     EndDrawing()
   end

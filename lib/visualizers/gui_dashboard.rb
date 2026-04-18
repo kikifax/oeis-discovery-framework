@@ -13,6 +13,7 @@ class GUIDashboard
     @sequences = load_all_sequences
     @current_display_name = @sequences.keys.first
     @num_terms = 2000
+    @state_version = 1
     save_state
   end
 
@@ -49,10 +50,12 @@ class GUIDashboard
   end
 
   def save_state
+    @state_version += 1
     data = @sequences[@current_display_name]
     state = {
       key: data[:key],
       num_terms: @num_terms,
+      version: @state_version,
       timestamp: Time.now.to_f
     }
     
