@@ -3,8 +3,7 @@ require 'json'
 require 'prime'
 require_relative '../sequence_template'
 
-# Initialize Raylib Library
-puts "[DEBUG] Locating Raylib shared library..."
+# Initialize Raylib
 shared_lib_path = Gem::Specification.find_by_name('raylib-bindings').full_gem_path + '/lib/'
 case RUBY_PLATFORM
 when /mswin|msys|mingw|cygwin/
@@ -16,217 +15,180 @@ when /linux/
   arch = RUBY_PLATFORM.split('-')[0]
   Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.so")
 end
-puts "[DEBUG] Raylib library loaded."
 
-class RaylibExplorer
+class RaylibViewer
   include Raylib
 
-  # THEME COLORS (Using simple Color.new)
-  SIDEBAR_W = 380.0
-
+  STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
+  
   def initialize
-    puts "[DEBUG] Initializing RaylibExplorer object..."
-    @sequences = load_sequences_metadata
-    @current_idx = 0
-    @num_terms = 2000
-    @scroll_offset = 0.0
-    @dragging = false
-    
-    @offset_x = SIDEBAR_W + 50.0
-    @offset_y = 500.0
-    @zoom_x = 0.5
-    @zoom_y = 0.1
+    @current_key = nil
+    @num_terms = -1
+    @last_version = -1
     @terms = []
+    @last_sync = 0.0
     
+    # View State
+    @offset_x = 0.0
+    @offset_y = 0.0
+    @zoom_x = 1.0
+    @zoom_y = 1.0
+    
+    @dragging = false
+    @last_mouse_x = 0.0
+
+    @sequences = load_sequence_map
     $stdout.sync = true
-    puts "[DEBUG] Object ready. Sequences found: #{@sequences.size}"
   end
 
-  def load_sequences_metadata
-    cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
-    return [] unless File.exist?(cache_path)
-    begin
-      data = JSON.parse(File.read(cache_path))
-      data.map! do |s|
-        { 
-          key: s['key'], 
-          name: s['name'], 
-          score: s['fitness_score'] || 0,
-          display: "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
-        }
-      end
-      data.sort_by { |s| -s[:score] }
-    rescue => e
-      puts "[DEBUG] Metadata error: #{e.message}"
-      []
-    end
-  end
-
-  def load_sequence(key)
-    puts "[DEBUG] Loading sequence: #{key}"
-    @current_key = key
-    file = File.join(Dir.pwd, 'sequences', "#{key}.rb")
-    return unless File.exist?(file)
-
-    begin
-      # Use basic require
-      require file
-      # Heuristic to find class
+  def load_sequence_map
+    map = {}
+    Dir.glob(File.join(Dir.pwd, 'sequences', '*.rb')).each do |file|
+      key = File.basename(file, '.rb')
       class_name = key.split('_').map(&:capitalize).join
-      klass = Object.const_get(class_name) rescue nil
-      
-      if klass
-        @instance = klass.new
-        @terms = @instance.generate(@num_terms)
-        puts "[DEBUG] Generated #{@terms.size} terms."
-        
-        doc_path = File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")
-        @doc_lines = File.exist?(doc_path) ? File.read(doc_path).lines.map(&:strip) : ["No documentation found."]
-        @doc_lines = @doc_lines.reject { |l| l.start_with?("Doc Version:") || l.strip.empty? }
-        
-        auto_fit_all()
-      else
-        puts "[DEBUG] Failed to find class for #{key}"
+      begin
+        require file
+        map[key] = Object.const_get(class_name)
+      rescue => e
+        puts "Error loading #{key}: #{e.message}"
       end
-    rescue => e
-      puts "[DEBUG] Error loading #{key}: #{e.message}"
+    end
+    map
+  end
+
+  def sync_state
+    return unless File.exist?(STATE_FILE)
+    begin
+      state = JSON.parse(File.read(STATE_FILE))
+    rescue
+      return
+    end
+
+    # Sync by version
+    new_v = state['version'].to_i
+    return if new_v <= @last_version
+    @last_version = new_v
+
+    if state['exit']
+      CloseWindow()
+      exit(0)
+    end
+    
+    key = state['key'].to_s
+    num = state['num_terms'].to_i
+    
+    klass = @sequences[key]
+    if klass
+      puts "[Sync] v#{@last_version}: #{key}"
+      @current_key = key
+      @num_terms = num
+      @instance = klass.new
+      @terms = @instance.generate(@num_terms)
+      auto_fit_all()
     end
   end
 
   def auto_fit_all
-    return if @terms.nil? || @terms.empty?
-    w = GetScreenWidth()
-    h = GetScreenHeight()
-    return if w <= 0
+    return if @terms.empty?
     
-    max_v, min_v = @terms.max, @terms.min
-    range_y = [(max_v - min_v).abs, 1.0].max
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
     
-    padding = 100.0
-    @zoom_y = (h - padding * 2) / range_y
-    @offset_y = padding + (max_v * @zoom_y)
+    max_v = @terms.max
+    min_v = @terms.min
+    range_y = (max_v - min_v).to_f
+    range_y = 1.0 if range_y == 0
+    
+    padding_y = 100.0 
+    @zoom_y = (h - padding_y * 2) / range_y
+    @offset_y = padding_y + (max_v * @zoom_y)
 
     padding_x = 60.0
-    graph_area_w = w - SIDEBAR_W
-    @zoom_x = (graph_area_w - padding_x * 2) / [@terms.size.to_f, 1].max
-    @offset_x = SIDEBAR_W + padding_x
-    puts "[DEBUG] Scaling complete. ZoomX: #{@zoom_x.round(4)}"
+    @zoom_x = (w - padding_x * 2) / [@terms.size.to_f, 1].max
+    @offset_x = padding_x
+  end
+
+  def auto_fit_y_visible
+    return if @terms.nil? || @terms.empty?
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
+    
+    start_i = [((- @offset_x) / @zoom_x).floor, 0].max
+    end_i = [((w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+    return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
+    
+    slice = @terms[start_i..end_i]
+    return if slice.nil? || slice.empty?
+    
+    range_y = (slice.max - slice.min).to_f
+    range_y = 1.0 if range_y == 0
+    
+    padding_y = 100.0 
+    @zoom_y = (h - padding_y * 2) / range_y
+    @offset_y = padding_y + (slice.max * @zoom_y)
   end
 
   def run
-    puts "[DEBUG] Setting Window Flags..."
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
-    puts "[DEBUG] Opening Window..."
-    InitWindow(1600, 950, "OEIS Diagnostic Explorer v#{OEIS::VERSION}")
+    InitWindow(1600, 950, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
-    puts "[DEBUG] Window Open. Resolution: #{GetScreenWidth()}x#{GetScreenHeight()}"
-    
-    if @sequences.any?
-      load_sequence(@sequences[0][:key])
-    else
-      @doc_lines = ["No sequences found.", "Run build-catalog."]
-    end
 
-    puts "[DEBUG] Entering Main Loop..."
-    begin
-      until WindowShouldClose()
-        update()
-        draw()
-      end
-    rescue => e
-      puts "[CRASH] Error: #{e.message}"
-      puts e.backtrace.first(5).join("\n")
-    ensure
-      puts "[DEBUG] Closing Window..."
-      CloseWindow()
+    until WindowShouldClose()
+      sync_state()
+      auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
+      update()
+      draw()
     end
-    puts "[DEBUG] Execution finished."
+    CloseWindow()
   end
 
   def update
-    # Use instance vars for colors inside the loop to be safe
-    @bg_dark ||= Color.new(18, 18, 22, 255)
-    @accent  ||= Color.new(0, 150, 255, 255)
-    @sidebar ||= Color.new(28, 28, 33, 255)
-    @text_white ||= Color.new(230, 230, 240, 255)
+    mx = GetMouseX().to_f
+    if IsMouseButtonPressed(MOUSE_BUTTON_LEFT); @dragging = true; @last_mouse_x = mx; end
+    if IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
 
-    w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
-    mx, my = GetMouseX().to_f, GetMouseY().to_f
-
-    if mx < SIDEBAR_W
-      @scroll_offset += GetMouseWheelMove() * 35
-      @scroll_offset = [@scroll_offset, 0].min
-      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-        list_y = 90.0 + @scroll_offset
-        @sequences.each_with_index do |s, i|
-          if my >= list_y && my < list_y + 32
-            @current_idx = i
-            load_sequence(s[:key])
-            break
-          end
-          list_y += 32
-        end
-      end
-    else
-      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-        @dragging = true
-        @last_mouse_x = mx
-      elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
-        @dragging = false
-      end
-      if @dragging
-        @offset_x += (mx - @last_mouse_x)
-        @last_mouse_x = mx
-      end
-      wheel = GetMouseWheelMove()
-      @zoom_x *= (wheel > 0 ? 1.2 : 0.8) if wheel != 0
-      auto_fit_all() if IsKeyPressed(KEY_R)
+    if @dragging
+      @offset_x += (mx - @last_mouse_x)
+      @last_mouse_x = mx
     end
+
+    wheel = GetMouseWheelMove()
+    @zoom_x *= (wheel > 0 ? 1.2 : 0.8) if wheel != 0
+    auto_fit_all() if IsKeyPressed(KEY_R)
   end
 
   def draw
     BeginDrawing()
-    ClearBackground(@bg_dark)
-    w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
+    ClearBackground(RAYWHITE)
+    
+    w = GetScreenWidth().to_f
+    h = GetScreenHeight().to_f
 
-    # Axes
-    axis_c = Color.new(50, 50, 60, 255)
-    DrawLine(SIDEBAR_W.to_i, @offset_y.to_i, w.to_i, @offset_y.to_i, axis_c) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, axis_c)
+    # Grid (Use pre-defined LIGHTGRAY)
+    DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, LIGHTGRAY)
 
-    # Sequence (Simple DrawLine to avoid Vector2)
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
         x2 = @offset_x + i * @zoom_x
-        next if x2 < SIDEBAR_W || x1 > w
+        next if x2 < 0 || x1 > w
+        
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
+        
+        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
       end
     end
 
-    # Sidebar
-    DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, @sidebar)
-    DrawText("CATALOG", 30, 30, 22, @text_white)
+    # Status Bar
+    DrawRectangle(0, 0, w.to_i, 35, Fade(SKYBLUE, 0.5))
+    name = @instance ? @instance.name : "None"
+    DrawText("#{name} | Terms: #{@num_terms}", 15, 8, 20, DARKBLUE)
 
-    # Scissored List
-    list_h = [h - 520, 10].max
-    BeginScissorMode(0, 80, SIDEBAR_W.to_i, list_h.to_i)
-      list_y = 90.0 + @scroll_offset
-      @sequences.each_with_index do |s, i|
-        color = (i == @current_idx) ? WHITE : @text_white
-        DrawText(s[:display], 40, list_y.to_i, 17, color)
-        list_y += 32
-      end
-    EndScissorMode()
-
-    # Header
-    DrawText(@instance ? @instance.name : "Select...", SIDEBAR_W.to_i + 25, 15, 22, @text_white)
-    
     EndDrawing()
   end
 end
 
-puts "[DEBUG] Starting RaylibExplorer.new.run"
-RaylibExplorer.new.run
+if __FILE__ == $0
+  RaylibViewer.new.run
+end
