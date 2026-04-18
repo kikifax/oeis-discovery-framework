@@ -129,12 +129,12 @@ class RaylibViewer
   end
 
   def draw
-    BeginDrawing()
-    ClearBackground(RAYWHITE)
+    BeginDrawing
+    ClearBackground RAYWHITE
 
     # Draw Axes
-    DrawLine(0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY)
+    DrawLine 0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY
+    DrawLine @offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
@@ -145,17 +145,17 @@ class RaylibViewer
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
         
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
-        DrawCircle(x1.to_i, y1.to_i, 2, MAROON) if @zoom_x > 8.0
+        DrawLine x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE
+        DrawCircle x1.to_i, y1.to_i, 2, MAROON if @zoom_x > 8.0
       end
     end
 
     # Overlay
     name = @instance ? @instance.name : "None"
-    DrawRectangle(0, 0, 1200, 30, Fade(SKYBLUE, 0.5))
-    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
+    DrawRectangle 0, 0, 1200, 30, Fade(SKYBLUE, 0.5)
+    DrawText "#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE
 
-    EndDrawing()
+    EndDrawing
   end
 end
 
