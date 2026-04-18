@@ -17,20 +17,32 @@ class GUIDashboard
   end
 
   def load_all_sequences
+    cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
     seqs = {}
-    Dir.glob(File.join(__dir__, '..', '..', 'sequences', '**', '*.rb')).each do |file|
-      existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-      require_relative file
-      new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-      klass = (new_classes - existing_classes).first
-      
-      if klass
-        key = File.basename(file, '.rb')
-        instance = klass.new
-        report = instance.analyze(1000)
-        score = report[:fitness_score]
-        display_name = "[#{score.to_i.to_s.rjust(3)}] #{instance.name}"
-        seqs[display_name] = { key: key, score: score }
+
+    if File.exist?(cache_path)
+      puts "Loading sequence metadata from cache..."
+      data = JSON.parse(File.read(cache_path))
+      data.each do |s|
+        display_name = "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
+        seqs[display_name] = { key: s['key'], score: s['fitness_score'] }
+      end
+    else
+      puts "No metadata cache found. Performing full scan (this may take a while)..."
+      Dir.glob(File.join(__dir__, '..', '..', 'sequences', '**', '*.rb')).each do |file|
+        existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+        require_relative file
+        new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+        klass = (new_classes - existing_classes).first
+        
+        if klass
+          key = File.basename(file, '.rb')
+          instance = klass.new
+          report = instance.analyze(1000)
+          score = report[:fitness_score]
+          display_name = "[#{score.to_i.to_s.rjust(3)}] #{instance.name}"
+          seqs[display_name] = { key: key, score: score }
+        end
       end
     end
     seqs.sort_by { |_, v| -v[:score] }.to_h

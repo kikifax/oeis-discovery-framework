@@ -46,7 +46,10 @@ DOCUMENTER_VERSION = 1
 def build_catalog(sequences)
   docs_dir = File.join(__dir__, 'docs', 'sequences')
   FileUtils.mkdir_p(docs_dir)
+  FileUtils.mkdir_p('.cache')
   
+  catalog_data = []
+
   # 1. Update Individual Sequence Docs
   sequences.each do |key, klass|
     instance = klass.new
@@ -59,9 +62,19 @@ def build_catalog(sequences)
       existing_version = v_line.split(":").last.to_i if v_line
     end
     
+    # We always need the analysis for the catalog JSON
+    report = instance.analyze(1000)
+    
+    catalog_data << {
+      key: key,
+      name: instance.name,
+      rank: instance.rank,
+      formula: instance.formula,
+      fitness_score: report[:fitness_score]
+    }
+
     if existing_version < DOCUMENTER_VERSION
       puts "Updating documentation for #{key} (v#{existing_version} -> #{DOCUMENTER_VERSION})..."
-      report = instance.analyze(1000) # Use 1000 terms for the doc report
       
       File.open(doc_path, "w") do |f|
         f.puts "Doc Version: #{DOCUMENTER_VERSION}"
@@ -89,6 +102,9 @@ def build_catalog(sequences)
       end
     end
   end
+
+  # Save fast-loading JSON for GUI
+  File.write('.cache/catalog.json', catalog_data.to_json)
 
   # 2. Update the Main CATALOG.md Index
   File.open("CATALOG.md", "w") do |f|
