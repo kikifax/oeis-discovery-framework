@@ -1,9 +1,14 @@
 require 'json'
 require 'fileutils'
+require_relative 'version'
 
 # Base class for OEIS-style sequences
 class OEISSequence
   attr_reader :name, :description, :author, :rank, :formula, :oeis_id, :terms
+
+  def version
+    OEIS::VERSION
+  end
 
   def initialize
     @name = "Unnamed Sequence"

@@ -93,7 +93,7 @@ class RaylibViewer
   end
 
   def run
-    InitWindow(1200, 900, "OEIS Explorer: Viewer")
+    InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
     until WindowShouldClose()

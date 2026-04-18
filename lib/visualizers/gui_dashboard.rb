@@ -79,7 +79,7 @@ class GUIDashboard
   end
 
   def launch
-    window('OEIS Explorer: Controls', 400, 800) {
+    window("OEIS Explorer v#{OEIS::VERSION}: Controls", 400, 800) {
       margined true
 
       vertical_box {

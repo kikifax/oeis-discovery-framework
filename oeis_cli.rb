@@ -149,7 +149,7 @@ sequences = load_sequences
 
 options = {}
 OptionParser.new do |opts|
-  opts.banner = "Usage: ruby oeis_cli.rb [options] [command] [sequence_key] [count]"
+  opts.banner = "OEIS Discovery Framework v#{OEIS::VERSION}\nUsage: ruby oeis_cli.rb [options] [command] [sequence_key] [count]"
   
   opts.on("-h", "--help", "Prints this help") do
     puts opts
