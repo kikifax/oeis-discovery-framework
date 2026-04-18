@@ -80,8 +80,8 @@ when "explore"
   LOCK_FILE = ".cache/session.lock"
   File.write(LOCK_FILE, Process.pid)
   
-  dashboard_path = File.expand_path("lib/visualizers/gui_dashboard.rb", __dir__)
-  viewer_path = File.expand_path("lib/visualizers/raylib_viewer.rb", __dir__)
+  dashboard_path = File.join(__dir__, "lib", "visualizers", "gui_dashboard.rb")
+  viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_viewer.rb")
   
   dashboard_cmd = "bundle exec ruby \"#{dashboard_path}\""
   viewer_cmd = "bundle exec ruby \"#{viewer_path}\""
