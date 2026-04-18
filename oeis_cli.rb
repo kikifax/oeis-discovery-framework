@@ -2,83 +2,61 @@ require 'optparse'
 require 'prime'
 require 'json'
 require 'fileutils'
-require_relative 'lib/sequence_template'
+require_relative 'lib/version'
 
 $stdout.sync = true
 puts "OEIS Discovery Framework v#{OEIS::VERSION}"
 
-def load_sequences
-  sequences = {}
-  Dir.glob(File.join(__dir__, 'sequences', '*.rb')).each do |file|
-    key = File.basename(file, '.rb')
-    sequences[key] = file
-  end
-  sequences
-end
-
-def load_sequence_class(file)
-  key = File.basename(file, '.rb')
-  class_name = key.split('_').map(&:capitalize).join
-  require file
-  Object.const_get(class_name)
-end
-
-def build_catalog(sequences, force: false)
-  cache_path = '.cache/catalog.json'
-  docs_dir = File.join(__dir__, 'docs', 'sequences')
-  if !force && File.exist?(cache_path)
-    cache_time = File.mtime(cache_path)
-    return if sequences.values.all? { |f| File.mtime(f) <= cache_time }
-  end
-  FileUtils.mkdir_p(docs_dir)
+def build_catalog
+  puts "[1/3] Syncing metadata..."
+  # Minimal catalog builder for launch
   FileUtils.mkdir_p('.cache')
-  
-  puts "Updating sequence metadata..."
   catalog_data = []
-  sequences.each do |key, file|
-    begin
-      klass = load_sequence_class(file)
-      instance = klass.new
-      report = instance.analyze(1000)
-      catalog_data << { key: key, name: instance.name, rank: instance.rank, formula: instance.formula, fitness_score: report[:fitness_score] }
-    rescue => e
-      puts "Error analyzing #{key}: #{e.message}"
-    end
+  Dir.glob('sequences/*.rb').each do |file|
+    key = File.basename(file, '.rb')
+    catalog_data << { key: key, name: key.split('_').map(&:capitalize).join(' '), score: 50 }
   end
-  File.write(cache_path, catalog_data.to_json)
+  File.write('.cache/catalog.json', catalog_data.to_json)
 end
-
-sequences = load_sequences
-
-OptionParser.new do |opts|
-  opts.banner = "Usage: ruby oeis_cli.rb [command]"
-  opts.on("-h", "--help") { puts opts; exit }
-end.parse!
 
 command = ARGV[0]
 
 case command
-when "list"
-  sequences.each { |k, f| puts k }
-when "build-catalog"
-  build_catalog(sequences, force: true)
 when "explore"
-  build_catalog(sequences)
+  build_catalog
   
-  puts "Launching OEIS Discovery Station v#{OEIS::VERSION}..."
+  # CREATE MOTHER LOCK
+  LOCK_FILE = ".cache/session.lock"
+  File.write(LOCK_FILE, Process.pid)
   
-  # Using Threads + System is the most reliable way to get output on Windows
-  t1 = Thread.new { system("bundle exec ruby lib/visualizers/gui_dashboard.rb") }
-  t2 = Thread.new { system("bundle exec ruby lib/visualizers/raylib_viewer.rb") }
+  puts "[2/3] Launching Station..."
   
-  puts ">> ACTIVE. Close the Dashboard to exit."
+  # Use popen to force console sharing on Windows
+  pids = []
   
-  t1.join
-  puts "Dashboard closed. Cleaning up..."
+  # Start Dashboard
+  pids << spawn("bundle exec ruby lib/visualizers/gui_dashboard.rb", :out=>:out, :err=>:err)
+  # Start Viewer
+  pids << spawn("bundle exec ruby lib/visualizers/raylib_viewer.rb", :out=>:out, :err=>:err)
   
-  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-    system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
+  puts "\n🚀 Station Active. Close the Dashboard to Exit."
+  
+  begin
+    # Wait for the dashboard pid specifically
+    Process.wait(pids[0])
+  rescue Interrupt
+    puts "\nConsole interrupt..."
+  ensure
+    File.delete(LOCK_FILE) rescue nil
+    pids.each do |pid|
+      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+        system("taskkill /F /PID #{pid} /T >NUL 2>&1")
+      else
+        Process.kill("KILL", pid) rescue nil
+      end
+    end
+    puts "Cleanup complete."
   end
 else
-  puts "Unknown command."
+  puts "Usage: bundle exec ruby oeis_cli.rb explore"
 end
