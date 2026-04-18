@@ -38,7 +38,7 @@ class RaylibExplorer
     puts "[Station] Initialized v#{OEIS::VERSION}"
   end
 
-  # Safe Color Factory to avoid FFI Redefinition Crashes
+  # Safe Color Factory
   def make_color(r, g, b, a=255)
     c = Raylib::Color.new
     c[:r], c[:g], c[:b], c[:a] = r, g, b, a
@@ -98,7 +98,7 @@ class RaylibExplorer
         @terms = @instance.generate(@num_terms)
         
         doc_path = File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")
-        @doc_lines = File.exist?(doc_path) ? File.read(doc_path).lines.reject{|l| l.start_with?("#")}.first(25).map(&:strip) : ["No docs found."]
+        @doc_lines = File.exist?(doc_path) ? File.read(doc_path).lines.reject{|l| l.start_with?("#")}.first(25).map(&:strip) : ["No docs."]
         
         auto_fit_all()
         puts "[Station] Loaded: #{key}"
@@ -128,10 +128,8 @@ class RaylibExplorer
     SetConfigFlags(FLAG_WINDOW_RESIZABLE)
     InitWindow(1600, 950, "OEIS Discovery Station v#{OEIS::VERSION}")
     SetTargetFPS(60)
-    
     init_theme()
 
-    # Initial Load
     load_sequence(@sequences[0][:key]) if @sequences.any?
 
     until WindowShouldClose()
@@ -188,8 +186,7 @@ class RaylibExplorer
     ClearBackground(@bg_dark)
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
 
-    # --- GRAPH ---
-    # Use DrawLine (Primitive) instead of DrawLineEx to avoid Vector2 Struct redefinition crash
+    # Axes
     DrawLine(SIDEBAR_W.to_i, @offset_y.to_i, w.to_i, @offset_y.to_i, @axis_c)
     DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, @axis_c)
 
@@ -200,13 +197,11 @@ class RaylibExplorer
         next if x2 < SIDEBAR_W || x1 > w
         y1 = @offset_y - @terms[i-1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
-        
-        # Primitive line drawing is 100% stable on Windows FFI
         DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
       end
     end
 
-    # --- SIDEBAR ---
+    # Sidebar
     DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, @sidebar_bg)
     DrawText("EXPLORER", 30, 30, 24, WHITE)
 
@@ -223,11 +218,10 @@ class RaylibExplorer
       end
     EndScissorMode()
 
-    # Documentation Panel
+    # Documentation
     panel_y = h - 350
     DrawRectangle(20, panel_y.to_i, (SIDEBAR_W - 40).to_i, 330, @bg_dark)
-    DrawText("ANALYSIS", 35, panel_y.to_i + 15, 14, @accent)
-    y_ptr = panel_y + 45
+    y_ptr = panel_y + 15
     (@doc_lines || []).each do |line|
       next if line.strip.empty?
       DrawText(line[0..45], 35, y_ptr.to_i, 11, @text_dim)
@@ -235,10 +229,8 @@ class RaylibExplorer
       break if y_ptr > h - 40
     end
 
-    # Title Header
     name = @instance ? @instance.name.upcase : "Select"
     DrawText("#{name} | #{@num_terms} TERMS", SIDEBAR_W.to_i + 30, 15, 20, @text_main)
-
     EndDrawing()
   end
 end
