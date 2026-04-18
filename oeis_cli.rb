@@ -2,8 +2,8 @@ require 'optparse'
 require 'prime'
 require 'json'
 require 'fileutils'
-require_relative 'lib/sequence_template'
 require_relative 'lib/version'
+require_relative 'lib/sequence_template'
 
 $stdout.sync = true
 puts "OEIS Discovery Framework v#{OEIS::VERSION}"
@@ -34,14 +34,15 @@ def build_catalog(sequences, force: false)
     cache_time = File.mtime(cache_path)
     needs_update = sequences.values.any? { |f| File.mtime(f) > cache_time }
     return unless needs_update
-    puts "[Sync] Updating metadata..."
+    puts "[Sync] Changes detected. Updating metadata..."
   end
 
   FileUtils.mkdir_p(docs_dir)
   FileUtils.mkdir_p('.cache')
   
   catalog_data = []
-  sequences.each do |key, file|
+  sequences.sort.each do |key, file|
+    puts "Analyzing #{key}..."
     begin
       klass = load_sequence_class(file)
       instance = klass.new
@@ -54,7 +55,7 @@ def build_catalog(sequences, force: false)
         fitness_score: report[:fitness_score]
       }
     rescue => e
-      puts "Error analyzing #{key}: #{e.message}"
+      puts "Error on #{key}: #{e.message}"
     end
   end
   File.write(cache_path, catalog_data.to_json)
@@ -76,29 +77,14 @@ when "build-catalog"
   build_catalog(sequences, force: true)
 when "explore"
   build_catalog(sequences)
-  
   viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_viewer.rb")
-  viewer_cmd = "bundle exec ruby \"#{viewer_path}\""
-  
-  puts "\n🚀 Launching Unified Discovery Station v#{OEIS::VERSION}..."
-  
-  begin
-    # Launch only the unified viewer
-    system(viewer_cmd)
-  rescue Interrupt
-    puts "\nShutting down..."
-  ensure
-    if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-      system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
-    end
-  end
+  puts "\n🚀 Launching Obsidian Explorer v#{OEIS::VERSION}..."
+  system("bundle exec ruby \"#{viewer_path}\"")
 when "analyze"
   key = ARGV[1]
-  count = (ARGV[2] || 1000).to_i
   if sequences[key]
     klass = load_sequence_class(sequences[key])
-    report = klass.new.analyze(count)
-    puts JSON.pretty_generate(report)
+    puts JSON.pretty_generate(klass.new.analyze(1000))
   end
 else
   puts "Usage: bundle exec ruby oeis_cli.rb explore"

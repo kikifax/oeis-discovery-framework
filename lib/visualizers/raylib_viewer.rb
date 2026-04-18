@@ -13,185 +13,214 @@ when /darwin/
   Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.dylib")
 when /linux/
   arch = RUBY_PLATFORM.split('-')[0]
-  lib_file = shared_lib_path + "libraylib.#{arch}.so"
-  unless File.exist?(lib_file)
-    puts "ERROR: Raylib library not found at #{lib_file}"
-    exit(1)
-  end
-  Raylib.load_lib(lib_file)
+  Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.so")
 end
 
-class RaylibViewer
+class RaylibExplorer
   include Raylib
 
-  STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
-  
+  # Theme
+  BG_DARK    = Color.new(20, 20, 25, 255)
+  SIDEBAR_BG = Color.new(30, 30, 40, 255)
+  ACCENT     = Color.new(0, 180, 255, 255)
+  TEXT_MAIN  = Color.new(240, 240, 250, 255)
+  TEXT_DIM   = Color.new(150, 150, 170, 255)
+
+  SIDEBAR_W = 380.0
+
   def initialize
-    @current_key = nil
-    @num_terms = -1
-    @last_version = -1
+    @sequences = load_catalog
+    @current_idx = 0
+    @num_terms = 2000
+    @scroll_offset = 0.0
+    @dragging = false
     @terms = []
-    @last_sync = 0.0
     
-    @offset_x = 0.0
-    @offset_y = 0.0
+    @offset_x = SIDEBAR_W + 50.0
+    @offset_y = 450.0
     @zoom_x = 1.0
     @zoom_y = 1.0
     
-    @dragging = false
-    @last_mouse_x = 0.0
-
-    @sequences = load_sequence_map
     $stdout.sync = true
+    puts "[Station] Initialized v#{OEIS::VERSION}"
   end
 
-  def load_sequence_class(file)
-    existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-    require file
-    new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-    (new_classes - existing_classes).first
-  end
-
-  def load_sequence_map
-    map = {}
-    Dir.glob(File.join(Dir.pwd, 'sequences', '*.rb')).each do |file|
-      key = File.basename(file, '.rb')
-      klass = load_sequence_class(file)
-      map[key] = klass if klass
-    end
-    map
-  end
-
-  def sync_state
-    return unless File.exist?(STATE_FILE)
+  def load_catalog
+    cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
+    return [] unless File.exist?(cache_path)
     begin
-      state = JSON.parse(File.read(STATE_FILE))
+      data = JSON.parse(File.read(cache_path))
+      data.map! do |s|
+        { 
+          key: s['key'], 
+          name: s['name'], 
+          score: s['fitness_score'] || 0,
+          display: "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
+        }
+      end
+      data.sort_by { |s| -s[:score] }
     rescue
-      return
+      []
     end
+  end
 
-    new_v = state['version'].to_i
-    return if new_v <= @last_version
-    @last_version = new_v
+  def load_sequence(key)
+    @current_key = key
+    file = File.join(Dir.pwd, 'sequences', "#{key}.rb")
+    return unless File.exist?(file)
 
-    if state['exit']
-      Raylib.CloseWindow()
-      exit(0)
-    end
-    
-    key = state['key'].to_s
-    num = state['num_terms'].to_i
-    
-    klass = @sequences[key]
-    if klass
-      puts "[Sync] v#{@last_version}: #{key}"
-      @current_key = key
-      @num_terms = num
-      @instance = klass.new
-      @terms = @instance.generate(@num_terms)
-      auto_fit_all()
+    begin
+      # Find class
+      existing = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+      require File.expand_path(file)
+      found = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+      klass = found.find { |c| c.to_s.downcase.include?(key.gsub('_', '')) } || (found - existing).first
+      
+      if klass
+        @instance = klass.new
+        @terms = @instance.generate(@num_terms)
+        
+        doc_path = File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")
+        @doc_lines = File.exist?(doc_path) ? File.read(doc_path).lines.reject{|l| l.start_with?("#")}.first(25).map(&:strip) : ["No docs."]
+        
+        auto_fit_all()
+        puts "[Station] Loaded #{key}"
+      end
+    rescue => e
+      puts "Error loading #{key}: #{e.message}"
     end
   end
 
   def auto_fit_all
-    return if @terms.nil? || @terms.empty?
+    return if @terms.empty?
+    w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
+    return if w == 0
     
-    w = Raylib.GetScreenWidth().to_f
-    h = Raylib.GetScreenHeight().to_f
+    max_v, min_v = @terms.max, @terms.min
+    range_y = [(max_v - min_v).abs, 1.0].max
     
-    max_v = @terms.max
-    min_v = @terms.min
-    range_y = (max_v - min_v).to_f
-    range_y = 1.0 if range_y == 0
-    
-    padding_y = 100.0 
-    @zoom_y = (h - padding_y * 2) / range_y
-    @offset_y = padding_y + (max_v * @zoom_y)
+    @zoom_y = (h - 200.0) / range_y
+    @offset_y = 100.0 + (max_v * @zoom_y)
 
-    padding_x = 60.0
-    @zoom_x = (w - padding_x * 2) / [@terms.size.to_f, 1].max
-    @offset_x = padding_x
-  end
-
-  def auto_fit_y_visible
-    return if @terms.nil? || @terms.empty?
-    w = Raylib.GetScreenWidth().to_f
-    h = Raylib.GetScreenHeight().to_f
-    
-    start_i = [((- @offset_x) / @zoom_x).floor, 0].max
-    end_i = [((w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
-    return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
-    
-    slice = @terms[start_i..end_i]
-    return if slice.nil? || slice.empty?
-    
-    range_y = (slice.max - slice.min).to_f
-    range_y = 1.0 if range_y == 0
-    
-    padding_y = 100.0 
-    @zoom_y = (h - padding_y * 2) / range_y
-    @offset_y = padding_y + (slice.max * @zoom_y)
+    graph_area_w = w - SIDEBAR_W
+    @zoom_x = (graph_area_w - 100.0) / [@terms.size.to_f, 1].max
+    @offset_x = SIDEBAR_W + 50.0
   end
 
   def run
-    Raylib.InitWindow(1600, 950, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
-    Raylib.SetTargetFPS(60)
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
+    InitWindow(1600, 950, "OEIS Discovery Station v#{OEIS::VERSION}")
+    SetTargetFPS(60)
 
-    until Raylib.WindowShouldClose()
-      sync_state()
-      auto_fit_y_visible() unless Raylib.IsMouseButtonDown(Raylib::MOUSE_BUTTON_LEFT) || Raylib.GetMouseWheelMove() != 0
+    # Initial Load
+    load_sequence(@sequences[0][:key]) if @sequences.any?
+
+    until WindowShouldClose()
       update()
       draw()
     end
-    Raylib.CloseWindow()
+    CloseWindow()
   end
 
   def update
-    mx = Raylib.GetMouseX().to_f
-    if Raylib.IsMouseButtonPressed(Raylib::MOUSE_BUTTON_LEFT); @dragging = true; @last_mouse_x = mx; end
-    if Raylib.IsMouseButtonReleased(Raylib::MOUSE_BUTTON_LEFT); @dragging = false; end
+    w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
+    mx, my = GetMouseX().to_f, GetMouseY().to_f
 
-    if @dragging
-      @offset_x += (mx - @last_mouse_x)
-      @last_mouse_x = mx
+    if mx < SIDEBAR_W
+      @scroll_offset += GetMouseWheelMove() * 30
+      @scroll_offset = [@scroll_offset, 0].min
+      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+        list_y = 80.0 + @scroll_offset
+        @sequences.each_with_index do |s, i|
+          if my >= list_y && my < list_y + 30
+            @current_idx = i
+            load_sequence(s[:key])
+            break
+          end
+          list_y += 30
+        end
+      end
+    else
+      # Graph Interaction
+      if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+        @dragging = true
+        @last_mouse_x = mx
+      elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
+        @dragging = false
+      end
+      if @dragging
+        @offset_x += (mx - @last_mouse_x)
+        @last_mouse_x = mx
+      end
+      wheel = GetMouseWheelMove()
+      @zoom_x *= (wheel > 0 ? 1.2 : 0.8) if wheel != 0
+      auto_fit_all() if IsKeyPressed(KEY_R)
     end
-
-    wheel = Raylib.GetMouseWheelMove()
-    @zoom_x *= (wheel > 0 ? 1.2 : 0.8) if wheel != 0
-    auto_fit_all() if Raylib.IsKeyPressed(Raylib::KEY_R)
+    
+    if IsKeyPressed(KEY_UP)
+      @num_terms += 500
+      load_sequence(@sequences[@current_idx][:key]) if @sequences[@current_idx]
+    elsif IsKeyPressed(KEY_DOWN) && @num_terms > 500
+      @num_terms -= 500
+      load_sequence(@sequences[@current_idx][:key]) if @sequences[@current_idx]
+    end
   end
 
   def draw
-    Raylib.BeginDrawing()
-    Raylib.ClearBackground(Raylib::RAYWHITE)
-    
-    w = Raylib.GetScreenWidth().to_f
-    h = Raylib.GetScreenHeight().to_f
+    BeginDrawing()
+    ClearBackground(BG_DARK)
+    w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
 
-    Raylib.DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, Raylib::LIGHTGRAY) 
-    Raylib.DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, Raylib::LIGHTGRAY)
+    # --- GRAPH ---
+    axis_color = Color.new(60, 60, 70, 255)
+    DrawLine(SIDEBAR_W.to_i, @offset_y.to_i, w.to_i, @offset_y.to_i, axis_color)
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, axis_color)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
         x2 = @offset_x + i * @zoom_x
-        next if x2 < 0 || x1 > w
-        
-        y1 = @offset_y - @terms[i - 1] * @zoom_y
+        next if x2 < SIDEBAR_W || x1 > w
+        y1 = @offset_y - @terms[i-1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
-        
-        Raylib.DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, Raylib::BLUE)
+        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, ACCENT)
       end
     end
 
-    Raylib.DrawRectangle(0, 0, w.to_i, 35, Raylib.Fade(Raylib::SKYBLUE, 0.5))
-    name = @instance ? @instance.name : "None"
-    Raylib.DrawText("#{name} | Terms: #{@num_terms}", 15, 8, 20, Raylib::DARKBLUE)
+    # --- SIDEBAR ---
+    DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, SIDEBAR_BG)
+    DrawText("EXPLORER", 30, 30, 24, WHITE)
 
-    Raylib.EndDrawing()
+    BeginScissorMode(0, 80, SIDEBAR_W.to_i, (h - 450).to_i)
+      list_y = 80.0 + @scroll_offset
+      @sequences.each_with_index do |s, i|
+        color = (i == @current_idx) ? WHITE : TEXT_DIM
+        if i == @current_idx
+          DrawRectangle(20, list_y.to_i - 2, (SIDEBAR_W - 40).to_i, 25, Color.new(255, 255, 255, 20))
+        end
+        DrawText(s[:display], 30, list_y.to_i, 16, color)
+        list_y += 30
+      end
+    EndScissorMode()
+
+    # Analysis Box
+    panel_y = h - 350
+    DrawRectangle(20, panel_y.to_i, (SIDEBAR_W - 40).to_i, 330, BG_DARK)
+    DrawText("ANALYSIS", 35, panel_y.to_i + 15, 14, ACCENT)
+    y_ptr = panel_y + 45
+    (@doc_lines || []).each do |line|
+      next if line.strip.empty?
+      DrawText(line[0..45], 35, y_ptr.to_i, 11, TEXT_DIM)
+      y_ptr += 15
+      break if y_ptr > h - 40
+    end
+
+    # Header
+    name = @instance ? @instance.name : "Select"
+    DrawText("#{name.upcase} | #{@num_terms} TERMS", SIDEBAR_W.to_i + 30, 15, 20, TEXT_MAIN)
+
+    EndDrawing()
   end
 end
 
-if __FILE__ == $0
-  RaylibViewer.new.run
-end
+RaylibExplorer.new.run
