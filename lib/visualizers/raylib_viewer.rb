@@ -22,6 +22,8 @@ when /linux/
 end
 
 class RaylibViewer
+  include Raylib
+
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
   
   def initialize
@@ -29,8 +31,8 @@ class RaylibViewer
     @num_terms = -1
     @last_version = -1
     @terms = []
+    @last_sync = 0.0
     
-    # View State
     @offset_x = 0.0
     @offset_y = 0.0
     @zoom_x = 1.0
@@ -68,7 +70,6 @@ class RaylibViewer
       return
     end
 
-    # Sync by version
     new_v = state['version'].to_i
     return if new_v <= @last_version
     @last_version = new_v
@@ -93,7 +94,7 @@ class RaylibViewer
   end
 
   def auto_fit_all
-    return if @terms.empty?
+    return if @terms.nil? || @terms.empty?
     
     w = Raylib.GetScreenWidth().to_f
     h = Raylib.GetScreenHeight().to_f
@@ -167,7 +168,6 @@ class RaylibViewer
     w = Raylib.GetScreenWidth().to_f
     h = Raylib.GetScreenHeight().to_f
 
-    # Grid
     Raylib.DrawLine(0, @offset_y.to_i, w.to_i, @offset_y.to_i, Raylib::LIGHTGRAY) 
     Raylib.DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, Raylib::LIGHTGRAY)
 
@@ -184,7 +184,6 @@ class RaylibViewer
       end
     end
 
-    # Status Bar
     Raylib.DrawRectangle(0, 0, w.to_i, 35, Raylib.Fade(Raylib::SKYBLUE, 0.5))
     name = @instance ? @instance.name : "None"
     Raylib.DrawText("#{name} | Terms: #{@num_terms}", 15, 8, 20, Raylib::DARKBLUE)
