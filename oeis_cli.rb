@@ -77,46 +77,20 @@ when "build-catalog"
 when "explore"
   build_catalog(sequences)
   
-  LOCK_FILE = ".cache/session.lock"
-  File.write(LOCK_FILE, Process.pid)
-  
-  dashboard_path = File.join(__dir__, "lib", "visualizers", "gui_dashboard.rb")
   viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_viewer.rb")
-  
-  dashboard_cmd = "bundle exec ruby \"#{dashboard_path}\""
   viewer_cmd = "bundle exec ruby \"#{viewer_path}\""
   
-  puts "\n🚀 Discovery Station starting! v#{OEIS::VERSION}"
-  puts ">> ACTIVE. Close either window to exit."
-
-  pids = []
+  puts "\n🚀 Launching Unified Discovery Station v#{OEIS::VERSION}..."
+  
   begin
-    # Spawn sharing console
-    pids << Process.spawn(dashboard_cmd, :out => :out, :err => :err)
-    pids << Process.spawn(viewer_cmd, :out => :out, :err => :err)
-    
-    # Wait loop that checks if BOTH are alive
-    loop do
-      pids.each do |pid|
-        if Process.waitpid(pid, Process::WNOHANG)
-          puts "Window (PID #{pid}) closed."
-          raise Interrupt
-        end
-      end
-      sleep 0.5
-    end
+    # Launch only the unified viewer
+    system(viewer_cmd)
   rescue Interrupt
-    puts "\nShutting down Discovery Station..."
+    puts "\nShutting down..."
   ensure
-    File.delete(LOCK_FILE) rescue nil
-    pids.each do |pid|
-      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        system("taskkill /F /PID #{pid} /T >NUL 2>&1")
-      else
-        Process.kill("TERM", pid) rescue nil
-      end
+    if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+      system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
     end
-    puts "Cleanup complete."
   end
 when "analyze"
   key = ARGV[1]
