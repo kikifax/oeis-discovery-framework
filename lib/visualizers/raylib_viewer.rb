@@ -54,7 +54,25 @@ class RaylibViewer
   def watchdog
     # If the parent lock is gone, we die
     unless File.exist?(LOCK_FILE)
-      puts "[VIEWER] Lock lost. Terminating."
+      CloseWindow()
+      exit(0)
+    end
+
+    # Check if parent PID is still alive (Windows specific)
+    begin
+      parent_pid = File.read(LOCK_FILE).to_i
+      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+        # Use tasklist to see if PID is still active
+        alive = `tasklist /FI "PID eq #{parent_pid}" /NH`.include?(parent_pid.to_s)
+        unless alive
+          CloseWindow()
+          exit(0)
+        end
+      else
+        Process.kill(0, parent_pid)
+      end
+    rescue
+      CloseWindow()
       exit(0)
     end
   end

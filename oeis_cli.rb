@@ -78,7 +78,18 @@ command = ARGV[0]
 
 case command
 when "explore"
-  build_catalog(sequences)
+  # Detect if catalog is corrupted with placeholders (all 50s)
+  if File.exist?('.cache/catalog.json')
+    raw = File.read('.cache/catalog.json')
+    if raw.include?('"fitness_score":50') && !raw.include?('"fitness_score":7')
+      puts "[!] Corrupted catalog detected. Forcing full re-sync..."
+      build_catalog(sequences, force: true)
+    else
+      build_catalog(sequences)
+    end
+  else
+    build_catalog(sequences)
+  end
   
   LOCK_FILE = ".cache/session.lock"
   File.write(LOCK_FILE, Process.pid)
