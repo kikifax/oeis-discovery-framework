@@ -63,19 +63,24 @@ def sync_state
 
   @last_sync = state['timestamp']
 
+  # If key OR term count changed, we need a hard re-fit
   if state['key'] != @current_key || state['num_terms'] != @num_terms
+    puts "Syncing: #{state['key']} (#{state['num_terms']} terms)"
     @current_key = state['key']
     @num_terms = state['num_terms']
+
     klass = @sequences[@current_key]
     if klass
       @instance = klass.new
+      # Force a completely fresh generation/load from cache
       @terms = @instance.generate(@num_terms)
-      # Reset X-zoom/offset to show full sequence when it changes
+
+      # Snap the view to the new data
       auto_fit_x()
+      auto_fit_y_visible()
     end
   end
-end
-
+  end
 def auto_fit_x
   return if @terms.empty?
   padding_x = 50.0
