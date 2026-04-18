@@ -22,7 +22,7 @@ class RaylibExplorer
   SIDEBAR_W = 380
 
   def initialize
-    puts ">>> [STATION] STARTING v1.5.4 <<<"
+    puts ">>> [STATION] STARTING v1.5.5 <<<"
     STDOUT.flush
     @sequences = load_catalog
     @current_idx = 0
@@ -41,34 +41,27 @@ class RaylibExplorer
     $stdout.sync = true
   end
 
-  # THE ONLY STABLE WAY TO MAKE COLORS ON WINDOWS FFI
   def safe_color(r, g, b, a=255)
     c = Raylib::Color.new
-    c[:r] = r
-    c[:g] = g
-    c[:b] = b
-    c[:a] = a
+    c[:r], c[:g], c[:b], c[:a] = r, g, b, a
     c
   end
 
   def init_theme
     @bg_dark    = safe_color(20, 20, 24)
-    @sidebar_bg = Raylib::GOLD # BUILT-IN CONSTANT (SYNC TEST)
+    @sidebar_bg = Raylib::GOLD # SYNC TEST
     @accent     = safe_color(0, 150, 255)
     @text_main  = Raylib::WHITE
     @text_dim   = Raylib::LIGHTGRAY
 
-    # Try massive font
     win_f = "C:\\Windows\\Fonts\\arial.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 96, nil, 0)
       if @font && @font.texture.id > 0
         SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR)
-        puts "[STATION] Font: Arial active."
       end
     end
     @font ||= GetFontDefault()
-    STDOUT.flush
   end
 
   def load_catalog
@@ -100,7 +93,7 @@ class RaylibExplorer
         puts "[STATION] Loaded: #{key}"
         STDOUT.flush
       end
-    rescue => e; puts "Error: #{e.message}"; end
+    rescue; end
   end
 
   def auto_fit_all
@@ -115,11 +108,8 @@ class RaylibExplorer
   end
 
   def update
-    # --- INPUT PRIORITY ---
     if IsKeyPressed(KEY_T)
-      puts "[STATION] Typing mode ON."
-      STDOUT.flush
-      @edit_mode = true; @input_text = ""
+      @edit_mode = true; @input_text = ""; return
     end
 
     if @edit_mode
@@ -138,7 +128,6 @@ class RaylibExplorer
       return
     end
 
-    # --- MOUSE ---
     mx, my = GetMouseX(), GetMouseY()
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       if mx < SIDEBAR_W
@@ -152,9 +141,14 @@ class RaylibExplorer
       else
         @dragging = true; @last_mx = mx.to_f
       end
-    elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
+    elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
+      @dragging = false
+    end
 
-    if @dragging; @offset_x += (mx.to_f - @last_mx); @last_mx = mx.to_f; end
+    if @dragging
+      @offset_x += (mx.to_f - @last_mx)
+      @last_mx = mx.to_f
+    end
 
     wheel = GetMouseWheelMove()
     if wheel != 0
@@ -174,51 +168,44 @@ class RaylibExplorer
     ClearBackground(@bg_dark)
     w, h = GetScreenWidth(), GetScreenHeight()
 
-    # --- GRAPH ---
-    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, Raylib::GRAY)
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, Raylib::GRAY)
+    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, GRAY)
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, GRAY)
+
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
-        x1 = @offset_x + (i - 1) * @zoom_x
-        x2 = @offset_x + i * @zoom_x
+        x1, x2 = @offset_x + (i - 1) * @zoom_x, @offset_x + i * @zoom_x
         next if x2 < SIDEBAR_W || x1 > w
-        y1 = @offset_y - @terms[i-1] * @zoom_y
-        y2 = @offset_y - @terms[i] * @zoom_y
+        y1, y2 = @offset_y - @terms[i-1] * @zoom_y, @offset_y - @terms[i] * @zoom_y
         DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
       end
     end
 
-    # --- SIDEBAR ---
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    DrawText("STATION v1.5.4", 30, 30, 24, Raylib::BLACK)
+    DrawText("STATION v1.5.5", 30, 30, 24, BLACK)
 
-    # Scissor is safe if dimensions are calculated
-    sh = [h - 150, 10].max
-    BeginScissorMode(0, 90, SIDEBAR_W, sh.to_i)
+    BeginScissorMode(0, 90, SIDEBAR_W, h - 100)
       list_y = 100.0 + @scroll_offset
       @sequences.each_with_index do |s, i|
-        color = (i == @current_idx) ? Raylib::WHITE : Raylib::BLACK
+        color = (i == @current_idx) ? WHITE : BLACK
         if i == @current_idx
-          DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, Raylib::BLACK)
+          DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, BLACK)
         end
         DrawText(s[:display], 40, list_y.to_i, 18, color)
         list_y += 35
       end
     EndScissorMode()
 
-    # --- HEADER ---
     name = @instance ? @instance.name.upcase : "SELECT"
-    DrawTextEx(@font, name, Vector2.new(SIDEBAR_W + 30, 20), 28.0, 1.0, Raylib::WHITE)
+    DrawTextEx(@font, name, Vector2.new(SIDEBAR_W + 30, 20), 28.0, 1.0, WHITE)
     
     terms_t = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
-    DrawText(terms_t, w - 250, 25, 20, @edit_mode ? Raylib::RED : Raylib::WHITE)
-
+    DrawText(terms_t, w - 250, 25, 20, @edit_mode ? RED : WHITE)
     EndDrawing()
   end
 
   def run
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI)
-    InitWindow(1600, 950, "OEIS Station v#{OEIS::VERSION}")
+    InitWindow(1600, 950, "OEIS Station v1.5.5")
     SetTargetFPS(60)
     init_theme()
     load_sequence(@sequences[0][:key]) if @sequences.any?
