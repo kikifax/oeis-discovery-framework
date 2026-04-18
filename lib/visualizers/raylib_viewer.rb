@@ -3,7 +3,7 @@ require 'json'
 require 'prime'
 require_relative '../sequence_template'
 
-# Initialize Raylib Library
+# Initialize Raylib
 shared_lib_path = Gem::Specification.find_by_name('raylib-bindings').full_gem_path + '/lib/'
 case RUBY_PLATFORM
 when /mswin|msys|mingw|cygwin/
@@ -22,6 +22,8 @@ class RaylibExplorer
   SIDEBAR_W = 380
 
   def initialize
+    puts ">>> [STATION] STARTING v1.5.4 <<<"
+    STDOUT.flush
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -37,25 +39,36 @@ class RaylibExplorer
     @zoom_y = 1.0
     
     $stdout.sync = true
-    puts "--- INITIALIZING STATION v1.5.3 (EMERALD CLEAN) ---"
+  end
+
+  # THE ONLY STABLE WAY TO MAKE COLORS ON WINDOWS FFI
+  def safe_color(r, g, b, a=255)
+    c = Raylib::Color.new
+    c[:r] = r
+    c[:g] = g
+    c[:b] = b
+    c[:a] = a
+    c
   end
 
   def init_theme
-    @bg_dark    = Color.new(20, 20, 24, 255)
-    @sidebar_bg = Color.new(0, 100, 60, 255) # EMERALD GREEN (SYNC TEST)
-    @accent     = Color.new(0, 200, 255, 255)
-    @hover_bg   = Color.new(255, 255, 255, 30)
+    @bg_dark    = safe_color(20, 20, 24)
+    @sidebar_bg = Raylib::GOLD # BUILT-IN CONSTANT (SYNC TEST)
+    @accent     = safe_color(0, 150, 255)
+    @text_main  = Raylib::WHITE
+    @text_dim   = Raylib::LIGHTGRAY
 
-    # DIRECT FONT LOAD
+    # Try massive font
     win_f = "C:\\Windows\\Fonts\\arial.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 96, nil, 0)
       if @font && @font.texture.id > 0
         SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR)
-        puts "[SUCCESS] LOADED ARIAL.TTF"
+        puts "[STATION] Font: Arial active."
       end
     end
     @font ||= GetFontDefault()
+    STDOUT.flush
   end
 
   def load_catalog
@@ -84,7 +97,8 @@ class RaylibExplorer
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
         auto_fit_all()
-        puts "[Station] Loaded #{key}"
+        puts "[STATION] Loaded: #{key}"
+        STDOUT.flush
       end
     rescue => e; puts "Error: #{e.message}"; end
   end
@@ -103,7 +117,8 @@ class RaylibExplorer
   def update
     # --- INPUT PRIORITY ---
     if IsKeyPressed(KEY_T)
-      puts "[DEBUG] T KEY PRESSED"
+      puts "[STATION] Typing mode ON."
+      STDOUT.flush
       @edit_mode = true; @input_text = ""
     end
 
@@ -160,8 +175,8 @@ class RaylibExplorer
     w, h = GetScreenWidth(), GetScreenHeight()
 
     # --- GRAPH ---
-    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, GRAY)
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, GRAY)
+    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, Raylib::GRAY)
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, Raylib::GRAY)
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
@@ -175,14 +190,16 @@ class RaylibExplorer
 
     # --- SIDEBAR ---
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    DrawText("STATION v1.5.3", 30, 30, 24, WHITE)
+    DrawText("STATION v1.5.4", 30, 30, 24, Raylib::BLACK)
 
-    BeginScissorMode(0, 90, SIDEBAR_W, h - 100)
+    # Scissor is safe if dimensions are calculated
+    sh = [h - 150, 10].max
+    BeginScissorMode(0, 90, SIDEBAR_W, sh.to_i)
       list_y = 100.0 + @scroll_offset
       @sequences.each_with_index do |s, i|
-        color = (i == @current_idx) ? WHITE : LIGHTGRAY
+        color = (i == @current_idx) ? Raylib::WHITE : Raylib::BLACK
         if i == @current_idx
-          DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, BLACK)
+          DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, Raylib::BLACK)
         end
         DrawText(s[:display], 40, list_y.to_i, 18, color)
         list_y += 35
@@ -191,11 +208,10 @@ class RaylibExplorer
 
     # --- HEADER ---
     name = @instance ? @instance.name.upcase : "SELECT"
-    # ONLY TITLE USES LoadFontEx
-    DrawTextEx(@font, name, Vector2.new(SIDEBAR_W + 30, 20), 28.0, 1.0, WHITE)
+    DrawTextEx(@font, name, Vector2.new(SIDEBAR_W + 30, 20), 28.0, 1.0, Raylib::WHITE)
     
     terms_t = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
-    DrawText(terms_t, w - 250, 25, 20, @edit_mode ? RED : WHITE)
+    DrawText(terms_t, w - 250, 25, 20, @edit_mode ? Raylib::RED : Raylib::WHITE)
 
     EndDrawing()
   end
