@@ -17,7 +17,6 @@ when /linux/
 end
 
 class RaylibViewer
-  # Include inside the class so methods are available to instances
   include Raylib
 
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
@@ -28,7 +27,6 @@ class RaylibViewer
     @last_sync = 0.0
     @terms = []
     
-    # View State
     @offset_x = 50.0
     @offset_y = 450.0
     @zoom_x = 0.2
@@ -45,7 +43,7 @@ class RaylibViewer
     map = {}
     Dir.glob(File.join(__dir__, '..', '..', 'sequences', '*.rb')).each do |file|
       existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-      require_relative file
+      require file
       new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
       klass = (new_classes - existing_classes).first
       map[File.basename(file, '.rb')] = klass if klass
@@ -73,7 +71,7 @@ class RaylibViewer
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
-        auto_fit_y()
+        auto_fit_y
       end
     end
   end
@@ -96,17 +94,17 @@ class RaylibViewer
     InitWindow(1200, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
-    until WindowShouldClose()
-      sync_state()
-      update()
-      draw()
+    until WindowShouldClose
+      sync_state
+      update
+      draw
     end
 
-    CloseWindow()
+    CloseWindow
   end
 
   def update
-    mx = GetMouseX().to_f
+    mx = GetMouseX.to_f
     
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       @dragging = true
@@ -120,7 +118,7 @@ class RaylibViewer
       @last_mouse_x = mx
     end
 
-    wheel = GetMouseWheelMove()
+    wheel = GetMouseWheelMove
     if wheel != 0
       factor = wheel > 0 ? 1.2 : 1.0/1.2
       @zoom_x *= factor
@@ -132,15 +130,14 @@ class RaylibViewer
     if IsKeyPressed(KEY_R)
       @offset_x = 50.0
       @zoom_x = 0.2
-      auto_fit_y()
+      auto_fit_y
     end
   end
 
   def draw
-    BeginDrawing()
+    BeginDrawing
     ClearBackground(RAYWHITE)
 
-    # Draw Axes
     DrawLine(0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY) 
     DrawLine(@offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY)
 
@@ -160,12 +157,11 @@ class RaylibViewer
       end
     end
 
-    # Overlay
     name = @instance ? @instance.name : "None"
     DrawRectangle(0, 0, 1200, 30, Fade(SKYBLUE, 0.5))
-    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
+    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS}", 10, 5, 20, DARKBLUE)
 
-    EndDrawing()
+    EndDrawing
   end
 end
 
