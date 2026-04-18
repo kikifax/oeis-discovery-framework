@@ -20,10 +20,8 @@ class RaylibViewer
   include Raylib
 
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
-  
-  # CORE COORDINATES: We use these for ALL math to avoid DPI issues
-  W = 1600.0
-  H = 900.0
+  W = 1600
+  H = 900
 
   def initialize
     @current_key = nil
@@ -38,10 +36,13 @@ class RaylibViewer
     
     @dragging = false
     @last_mouse_x = 0.0
+    
+    @status = "Initializing..."
+    @sync_count = 0
 
     @sequences = load_sequence_map
-    $stdout.sync = true # FORCE CONSOLE OUTPUT
-    puts "[VIEWER] Initialized v#{OEIS::VERSION}"
+    $stdout.sync = true
+    puts "[VIEWER] Started v#{OEIS::VERSION}"
   end
 
   def load_sequence_map
@@ -53,7 +54,7 @@ class RaylibViewer
         require file
         map[key] = Object.const_get(class_name)
       rescue => e
-        puts "[VIEWER] Error loading #{key}: #{e.message}"
+        puts "[VIEWER] Load error for #{key}: #{e.message}"
       end
     end
     map
@@ -62,20 +63,33 @@ class RaylibViewer
   def sync_state
     return unless File.exist?(STATE_FILE)
     
-    raw = File.read(STATE_FILE) rescue nil
-    return if raw.nil?
+    raw = nil
+    # Retry loop for file lock
+    3.times do
+      begin
+        raw = File.read(STATE_FILE)
+        break if raw && !raw.empty?
+      rescue
+        sleep 0.01
+      end
+    end
+    return if raw.nil? || raw.empty?
 
     begin
       state = JSON.parse(raw)
-    rescue
-      return # File half-written
+    rescue => e
+      @status = "JSON Error: #{e.message[0..20]}"
+      return
     end
 
-    return unless state && state['version'].to_i > @last_version
-    @last_version = state['version'].to_i
+    # Sync by version
+    new_version = state['version'].to_i
+    return if new_version <= @last_version
+    
+    @last_version = new_version
+    @sync_count += 1
 
     if state['exit']
-      puts "[VIEWER] Exit signal received."
       CloseWindow()
       exit(0)
     end
@@ -85,13 +99,12 @@ class RaylibViewer
     
     klass = @sequences[key]
     if klass
-      puts "[VIEWER] SYNCING: #{key} (#{num} terms) | v#{@last_version}"
+      @status = "Syncing v#{@last_version}: #{key}"
+      puts "[VIEWER] #{@status}"
       @current_key = key
       @num_terms = num
       @instance = klass.new
       @terms = @instance.generate(@num_terms)
-      
-      # FORCE IMMEDIATE PERFECT FIT
       auto_fit_all()
     end
   end
@@ -112,13 +125,14 @@ class RaylibViewer
     @zoom_x = (W - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
     
-    puts "[VIEWER] AUTO-FIT: Range [#{min_v}, #{max_v}], ZoomX: #{@zoom_x.round(4)}"
+    @status = "Auto-Fit Done (v#{@last_version})"
+    puts "[VIEWER] #{@status} | ZoomX: #{@zoom_x.round(4)}"
   end
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
     
-    # Calculate visible range based on our fixed W constant
+    # Calculate visible indices
     start_i = [((- @offset_x) / @zoom_x).floor, 0].max
     end_i = [((W - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
     
@@ -138,12 +152,12 @@ class RaylibViewer
   end
 
   def run
-    InitWindow(W.to_i, H.to_i, "OEIS Explorer v#{OEIS::VERSION}")
+    InitWindow(W, H, "OEIS Explorer v#{OEIS::VERSION}")
     SetTargetFPS(60)
 
     until WindowShouldClose()
       sync_state()
-      # Only dynamic scale if not using mouse
+      # Dynamic Y only if not interacting
       auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
       
       update()
@@ -179,9 +193,9 @@ class RaylibViewer
     BeginDrawing()
     ClearBackground(RAYWHITE)
     
-    # Draw Axes using internal W/H
-    DrawLine(0, @offset_y.to_i, W.to_i, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, H.to_i, LIGHTGRAY)
+    # Draw Grid
+    DrawLine(0, @offset_y.to_i, W, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, H, LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
@@ -196,10 +210,12 @@ class RaylibViewer
       end
     end
 
-    # Status
-    name = @instance ? @instance.name : "Waiting..."
-    DrawRectangle(0, 0, W.to_i, 35, Fade(SKYBLUE, 0.8))
-    DrawText("#{name} | Terms: #{@num_terms} | v#{@last_version}", 15, 8, 20, DARKBLUE)
+    # DEBUG OVERLAY
+    DrawRectangle(0, 0, W, 40, Fade(SKYBLUE, 0.9))
+    DrawText("SEQ: #{@current_key} | TERMS: #{@num_terms} | SYNC-v#{@last_version} | #{@status}", 15, 10, 20, DARKBLUE)
+    
+    # Bottom Controls Legend
+    DrawText("R: Reset Fit | Drag: Pan X | Wheel: Zoom X | A/D: Stretch X", 15, H - 25, 15, GRAY)
 
     EndDrawing()
   end

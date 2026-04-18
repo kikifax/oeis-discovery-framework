@@ -17,10 +17,10 @@ def load_sequences
 end
 
 def load_sequence_class(file)
-  existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+  key = File.basename(file, '.rb')
+  class_name = key.split('_').map(&:capitalize).join
   require file
-  new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-  (new_classes - existing_classes).first
+  Object.const_get(class_name)
 end
 
 def build_catalog(sequences, force: false)
@@ -32,16 +32,20 @@ def build_catalog(sequences, force: false)
   end
   FileUtils.mkdir_p(docs_dir)
   FileUtils.mkdir_p('.cache')
-  existing_catalog = File.exist?(cache_path) ? (JSON.parse(File.read(cache_path)) rescue []) : []
-  catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
+  
+  puts "Updating sequence metadata..."
   catalog_data = []
   sequences.each do |key, file|
-    instance = load_sequence_class(file).new
-    report = instance.analyze(1000)
-    catalog_data << { key: key, name: instance.name, rank: instance.rank, formula: instance.formula, fitness_score: report[:fitness_score] }
+    begin
+      klass = load_sequence_class(file)
+      instance = klass.new
+      report = instance.analyze(1000)
+      catalog_data << { key: key, name: instance.name, rank: instance.rank, formula: instance.formula, fitness_score: report[:fitness_score] }
+    rescue => e
+      puts "Error analyzing #{key}: #{e.message}"
+    end
   end
   File.write(cache_path, catalog_data.to_json)
-  puts "Catalog updated."
 end
 
 sequences = load_sequences
@@ -52,8 +56,6 @@ OptionParser.new do |opts|
 end.parse!
 
 command = ARGV[0]
-key = ARGV[1]
-count = (ARGV[2] || 100).to_i
 
 case command
 when "list"
@@ -63,36 +65,20 @@ when "build-catalog"
 when "explore"
   build_catalog(sequences)
   
-  # Windows Process Management
-  lock_file = ".cache/station.lock"
-  File.write(lock_file, Process.pid)
+  puts "Launching OEIS Discovery Station v#{OEIS::VERSION}..."
   
-  puts "Launching Discovery Station..."
-  # 'start' ensures windows actually open and don't block the console
-  spawn "bundle exec ruby lib/visualizers/gui_dashboard.rb"
-  spawn "bundle exec ruby lib/visualizers/raylib_viewer.rb"
+  # Using Threads + System is the most reliable way to get output on Windows
+  t1 = Thread.new { system("bundle exec ruby lib/visualizers/gui_dashboard.rb") }
+  t2 = Thread.new { system("bundle exec ruby lib/visualizers/raylib_viewer.rb") }
   
-  puts ">> ACTIVE. Close the Dashboard window to exit all."
+  puts ">> ACTIVE. Close the Dashboard to exit."
   
-  begin
-    loop do
-      unless File.exist?(lock_file)
-        puts "Dashboard closed. Shutting down..."
-        break
-      end
-      sleep 0.5
-    end
-  rescue Interrupt
-    puts "\nInterrupt received."
-  ensure
-    File.delete(lock_file) rescue nil
-    if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-      system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
-    end
+  t1.join
+  puts "Dashboard closed. Cleaning up..."
+  
+  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+    system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
   end
-when "analyze"
-  klass = load_sequence_class(sequences[key])
-  puts klass.new.analyze(count).to_json if klass
 else
   puts "Unknown command."
 end
