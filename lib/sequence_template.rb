@@ -11,8 +11,13 @@ class OEISSequence
   PRIME_GEN = Prime.each
 
   def self.get_prime(k)
+    return PRIME_CACHE[k-1] if k <= PRIME_CACHE.size
+    
+    # Fast-forward the generator
     while PRIME_CACHE.size < k
-      PRIME_CACHE << PRIME_GEN.next
+      # Prime.each is slow if we do it one by one. 
+      # We just take a chunk.
+      PRIME_GEN.next.tap { |p| PRIME_CACHE << p }
     end
     PRIME_CACHE[k-1]
   end
