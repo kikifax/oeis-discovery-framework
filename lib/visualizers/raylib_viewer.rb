@@ -16,9 +16,10 @@ when /linux/
   Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.so")
 end
 
-include Raylib
-
 class RaylibViewer
+  # Include inside the class so methods are available to instances
+  include Raylib
+
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
 
   def initialize
@@ -55,10 +56,14 @@ class RaylibViewer
   def sync_state
     return unless File.exist?(STATE_FILE)
     
-    state = JSON.parse(File.read(STATE_FILE)) rescue nil
+    begin
+      state = JSON.parse(File.read(STATE_FILE))
+    rescue
+      return
+    end
+
     return unless state && state['timestamp'] > @last_sync
     
-    puts "Syncing: #{state['key']} (#{state['num_terms']} terms)"
     @last_sync = state['timestamp']
     @num_terms = state['num_terms']
     
@@ -68,16 +73,23 @@ class RaylibViewer
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
-        
-        # Auto-fit initially on new sequence
-        max_v = @terms.max || 1
-        min_v = @terms.min || 0
-        range = (max_v - min_v).to_f
-        range = 1.0 if range == 0
-        @zoom_y = 700.0 / range
-        @offset_y = 800.0
+        auto_fit_y()
       end
     end
+  end
+
+  def auto_fit_y
+    return if @terms.empty?
+    max_v = @terms.max
+    min_v = @terms.min
+    range = (max_v - min_v).to_f
+    range = 1.0 if range == 0
+    
+    padding = 50.0 
+    drawable_height = 900.0 - (padding * 2)
+    
+    @zoom_y = drawable_height / range
+    @offset_y = padding + (max_v * @zoom_y)
   end
 
   def run
@@ -85,56 +97,55 @@ class RaylibViewer
     SetTargetFPS(60)
 
     until WindowShouldClose()
-      sync_state # Check for changes from GUI
-      update
-      draw
+      sync_state()
+      update()
+      draw()
     end
 
     CloseWindow()
   end
 
   def update
-    # Panning
-    mouse_x = GetMouseX().to_f
-    mouse_y = GetMouseY().to_f
+    # Panning (X only)
+    mx = GetMouseX().to_f
     
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       @dragging = true
-      @last_mouse_x, @last_mouse_y = mouse_x, mouse_y
+      @last_mouse_x = mx
     elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
       @dragging = false
     end
 
     if @dragging
-      @offset_x += (mouse_x - @last_mouse_x)
-      @offset_y += (mouse_y - @last_mouse_y)
-      @last_mouse_x, @last_mouse_y = mouse_x, mouse_y
+      @offset_x += (mx - @last_mouse_x)
+      @last_mouse_x = mx
     end
 
-    # Zooming
+    # Zooming (X only)
     wheel = GetMouseWheelMove()
     if wheel != 0
       factor = wheel > 0 ? 1.2 : 1.0/1.2
       @zoom_x *= factor
-      @zoom_y *= factor
     end
 
-    # Scaling
+    # Scaling (X only via A/D)
     @zoom_x *= 1.02 if IsKeyDown(KEY_D)
     @zoom_x /= 1.02 if IsKeyDown(KEY_A)
-    @zoom_y *= 1.02 if IsKeyDown(KEY_W)
-    @zoom_y /= 1.02 if IsKeyDown(KEY_S)
     
-    @offset_x, @offset_y = 50.0, 450.0 if IsKeyPressed(KEY_R)
+    if IsKeyPressed(KEY_R)
+      @offset_x = 50.0
+      @zoom_x = 0.2
+      auto_fit_y()
+    end
   end
 
   def draw
-    BeginDrawing
-    ClearBackground RAYWHITE
+    BeginDrawing()
+    ClearBackground(RAYWHITE)
 
     # Draw Axes
-    DrawLine 0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY
-    DrawLine @offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY
+    DrawLine(0, @offset_y.to_i, 1200, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, 900, LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
@@ -145,17 +156,19 @@ class RaylibViewer
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
         
-        DrawLine x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE
-        DrawCircle x1.to_i, y1.to_i, 2, MAROON if @zoom_x > 8.0
+        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, BLUE)
+        if @zoom_x > 8.0
+          DrawCircle(x1.to_i, y1.to_i, 2, MAROON)
+        end
       end
     end
 
     # Overlay
     name = @instance ? @instance.name : "None"
-    DrawRectangle 0, 0, 1200, 30, Fade(SKYBLUE, 0.5)
-    DrawText "#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE
+    DrawRectangle(0, 0, 1200, 30, Fade(SKYBLUE, 0.5))
+    DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
 
-    EndDrawing
+    EndDrawing()
   end
 end
 
