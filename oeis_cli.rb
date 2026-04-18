@@ -221,7 +221,8 @@ when "explore"
         Process.kill("TERM", pid) rescue nil
       end
     end
-  endwhen "generate", "plot", "gui", "bfile", "analyze"
+  end
+when "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]
     puts "Error: Sequence '#{key}' not found. Use 'ruby oeis_cli.rb list' to see available keys."
     exit 1
