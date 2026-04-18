@@ -24,11 +24,12 @@ class GUIDashboard
     if File.exist?(cache_path)
       data = JSON.parse(File.read(cache_path)) rescue []
       data.each do |s|
-        display_name = "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
-        seqs[display_name] = { key: s['key'], score: s['fitness_score'] }
+        f_score = s['fitness_score'] || 0
+        display_name = "[#{f_score.to_i.to_s.rjust(3)}] #{s['name']}"
+        seqs[display_name] = { key: s['key'], score: f_score }
       end
     end
-    seqs.sort_by { |_, v| -v[:score] }.to_h
+    seqs.sort_by { |_, v| -(v[:score] || 0) }.to_h
   end
 
   def save_state
