@@ -80,7 +80,8 @@ class RaylibViewer
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
-        # FORCE FULL SCALE RESET
+        
+        # RESET VIEW TO FIT NEW DATA LENGTH
         auto_fit_all()
       end
     end
@@ -98,7 +99,7 @@ class RaylibViewer
     @zoom_y = (900.0 - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
 
-    # 2. X-Fit (Full length)
+    # 2. X-Fit (Full length) - MUST USE ACTUAL TERMS SIZE
     padding_x = 50.0
     @zoom_x = (1200.0 - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
