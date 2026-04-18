@@ -176,37 +176,38 @@ when "list"
 when "build-catalog"
   build_catalog(sequences)
 when "explore"
-  $stdout.sync = true # Immediate flush
+  # Force immediate output
+  STDOUT.sync = true
 
-  # 1. Build catalog first to ensure cache exists
-  puts "[1/4] Syncing metadata and documentation..."
+  puts "[1/4] Syncing metadata..."
   build_catalog(sequences)
 
+  puts "[2/4] Initializing Dashboard..."
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
 
-  puts "[2/4] Launching Controller Dashboard..."
-  puts "[3/4] Launching High-Performance Viewer..."
-  puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
+  # On Windows, we need to be very careful with process management
+  # We will use Threads to keep the console responsive
+  threads = []
 
-  pids = []
-  begin
-    # Use spawn with out: $stdout to ensure we see the sub-process output
-    pids << spawn(dashboard_cmd, out: $stdout, err: $stderr)
-    pids << spawn(viewer_cmd, out: $stdout, err: $stderr)
+  puts "[3/4] Launching Viewer..."
+  puts "\n🚀 OEIS Discovery Station is starting!"
+  puts ">> IMPORTANT: Press Ctrl+C here to close all windows."
 
-    # Wait for the processes to finish
-    pids.each { |pid| Process.wait(pid) rescue nil }
-  rescue Interrupt
-    puts "\nExiting OEIS Discovery Station..."
-  ensure
-...
-      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        system("taskkill /F /PID #{pid} >NUL 2>&1")
-      else
-        Process.kill("TERM", pid) rescue nil
-      end
-    end
+  # Start Dashboard in a thread
+  threads << Thread.new { system(dashboard_cmd) }
+
+  # Start Viewer in the main foreground
+  # This blocks the console and handles input correctly
+  system(viewer_cmd)
+
+  puts "\nExiting..."
+  # Clean up threads if any
+  threads.each(&:kill)
+
+  # Force-kill any lingering ruby processes from this project
+  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+    system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
   end
 when "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]
