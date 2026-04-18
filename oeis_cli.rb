@@ -157,18 +157,37 @@ when "list"
 when "build-catalog"
   build_catalog(sequences)
 when "explore"
-  # Launch the Dashboard in the background
+  # 1. Build catalog first to ensure cache exists
+  build_catalog(sequences)
+  
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
   
-  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-    # Windows: Use start to background the process
-    system "start /B #{dashboard_cmd}"
-    system viewer_cmd
-  else
-    # Linux/Mac: Use & to background
-    spawn(dashboard_cmd)
-    system viewer_cmd
+  puts "Launching OEIS Discovery Station..."
+  puts "Press Ctrl+C in this console to exit both windows."
+  
+  pids = []
+  begin
+    if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+      pids << spawn(dashboard_cmd)
+      pids << spawn(viewer_cmd)
+    else
+      pids << spawn(dashboard_cmd)
+      pids << spawn(viewer_cmd)
+    end
+    
+    # Wait for the processes to finish
+    pids.each { |pid| Process.wait(pid) rescue nil }
+  rescue Interrupt
+    puts "\nExiting OEIS Discovery Station..."
+  ensure
+    pids.each do |pid|
+      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+        system("taskkill /F /PID #{pid} >NUL 2>&1")
+      else
+        Process.kill("TERM", pid) rescue nil
+      end
+    end
   end
 when "generate", "plot", "gui", "bfile", "analyze"
   unless sequences[key]

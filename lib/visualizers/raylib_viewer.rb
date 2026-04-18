@@ -106,7 +106,6 @@ class RaylibViewer
   end
 
   def update
-    # Panning (X only)
     mx = GetMouseX().to_f
     
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
@@ -121,14 +120,12 @@ class RaylibViewer
       @last_mouse_x = mx
     end
 
-    # Zooming (X only)
     wheel = GetMouseWheelMove()
     if wheel != 0
       factor = wheel > 0 ? 1.2 : 1.0/1.2
       @zoom_x *= factor
     end
 
-    # Scaling (X only via A/D)
     @zoom_x *= 1.02 if IsKeyDown(KEY_D)
     @zoom_x /= 1.02 if IsKeyDown(KEY_A)
     
