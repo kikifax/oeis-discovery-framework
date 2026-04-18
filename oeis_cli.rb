@@ -2,43 +2,48 @@ require 'optparse'
 require 'prime'
 require_relative 'lib/sequence_template'
 
-# Dynamically load all sequences from the sequences/ directory
+# Dynamically load sequence keys from the sequences/ directory
 def load_sequences
+  print "[1/3] Scanning sequence directory... "
   sequences = {}
-  # Use a temporary set to keep track of already loaded classes to avoid duplicates
-  existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-
   Dir.glob(File.join(__dir__, 'sequences', '**', '*.rb')).each do |file|
-    require_relative file
-    
-    # After requiring, find the NEW class added to the system
-    new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-    klass = (new_classes - existing_classes).first
-    
-    if klass
-      key = File.basename(file, '.rb')
-      sequences[key] = klass
-      existing_classes << klass
-    end
+    key = File.basename(file, '.rb')
+    sequences[key] = file
   end
+  puts "Found #{sequences.size} sequences."
   sequences
 end
 
+# Helper to actually load a class from a file
+def load_sequence_class(file)
+  existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+  require file
+  new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+  (new_classes - existing_classes).first
+end
+
 def list_sequences(sequences)
+  puts "[2/3] Loading sequence metadata for listing..."
   puts "%-30s | %-15s | %s" % ["Key", "Rank", "Name"]
   puts "-" * 80
   
+  all_data = []
+  sequences.each do |key, file|
+    klass = load_sequence_class(file)
+    instance = klass.new
+    all_data << { key: key, rank: instance.rank, name: instance.name }
+  end
+
   # Group by rank
-  grouped = sequences.values.group_by { |k| k.new.rank }
+  grouped = all_data.group_by { |d| d[:rank] }
   
   ["High Potential", "Medium Potential", "Experimental"].each do |rank|
     next unless grouped[rank]
-    grouped[rank].each do |klass|
-      instance = klass.new
-      key = sequences.key(klass)
-      puts "%-30s | %-15s | %s" % [key, rank, instance.name]
+    grouped[rank].each do |data|
+      puts "%-30s | %-15s | %s" % [data[:key], rank, data[:name]]
     end
   end
+  puts "[3/3] Done."
 end
 
 DOCUMENTER_VERSION = 1
@@ -55,7 +60,8 @@ def build_catalog(sequences)
   catalog_data = []
 
   # 1. Update Individual Sequence Docs
-  sequences.each do |key, klass|
+  sequences.each do |key, file|
+    klass = load_sequence_class(file)
     instance = klass.new
     doc_path = File.join(docs_dir, "#{key}.md")
     
@@ -169,23 +175,20 @@ when "build-catalog"
   build_catalog(sequences)
 when "explore"
   # 1. Build catalog first to ensure cache exists
+  puts "[1/4] Syncing metadata and documentation..."
   build_catalog(sequences)
   
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
   
-  puts "Launching OEIS Discovery Station..."
-  puts "Press Ctrl+C in this console to exit both windows."
+  puts "[2/4] Launching Controller Dashboard..."
+  puts "[3/4] Launching High-Performance Viewer..."
+  puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
   
   pids = []
   begin
-    if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-      pids << spawn(dashboard_cmd)
-      pids << spawn(viewer_cmd)
-    else
-      pids << spawn(dashboard_cmd)
-      pids << spawn(viewer_cmd)
-    end
+    pids << spawn(dashboard_cmd)
+    pids << spawn(viewer_cmd)
     
     # Wait for the processes to finish
     pids.each { |pid| Process.wait(pid) rescue nil }
@@ -206,10 +209,10 @@ when "generate", "plot", "gui", "bfile", "analyze"
     exit 1
   end
   
-  instance = sequences[key].new
-  
   case command
   when "analyze"
+    klass = load_sequence_class(sequences[key])
+    instance = klass.new
     puts "=========================================================="
     puts "      FULL OEIS FITNESS REPORT: #{instance.name}"
     puts "=========================================================="
@@ -251,16 +254,22 @@ when "generate", "plot", "gui", "bfile", "analyze"
     end
     puts "=========================================================="
   when "generate"
+    klass = load_sequence_class(sequences[key])
+    instance = klass.new
     puts "Generating #{count} terms for #{instance.name}..."
     puts instance.generate(count).join(", ")
   when "plot"
     require_relative 'lib/visualizers/oeis_plotter'
+    klass = load_sequence_class(sequences[key])
+    instance = klass.new
     terms = instance.generate(count)
     OEISPlotter.plot(terms)
   when "gui"
     # The new GUI has a combobox, so the key is optional
     system "bundle exec ruby lib/visualizers/oeis_gui.rb"
   when "bfile"
+    klass = load_sequence_class(sequences[key])
+    instance = klass.new
     puts "Generating b-file for #{instance.name} (up to a(#{count-1}))..."
     terms = instance.generate(count)
     path = File.join(__dir__, 'b_files', "b_#{key}.txt")
