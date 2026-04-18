@@ -62,6 +62,13 @@ class RaylibViewer
 
     return unless state && state['timestamp'] > @last_sync
     
+    # Check for exit signal from Dashboard
+    if state['exit']
+      puts "Exit signal received. Closing viewer..."
+      CloseWindow()
+      exit(0)
+    end
+    
     @last_sync = state['timestamp']
     
     if state['key'] != @current_key || state['num_terms'] != @num_terms

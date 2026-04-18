@@ -150,8 +150,9 @@ class GUIDashboard
       }
       
       on_closing do
-        # On Windows, deleting the file while the Viewer is polling it 
-        # causes a Permission Denied error. We'll just leave it.
+        # Signal the viewer to exit
+        state = { exit: true, timestamp: Time.now.to_f }
+        File.write(STATE_FILE, state.to_json) rescue nil
       end
     }.show
     

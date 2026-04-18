@@ -190,9 +190,19 @@ when "explore"
   begin
     pids << spawn(dashboard_cmd)
     pids << spawn(viewer_cmd)
-    Process.wait(pids.last)
+    
+    # Wait for BOTH processes in separate threads
+    t1 = Thread.new { Process.wait(pids[0]) rescue nil }
+    t2 = Thread.new { Process.wait(pids[1]) rescue nil }
+    
+    # Block the main thread until either sub-process exits
+    loop do
+      break unless t1.alive? && t2.alive?
+      sleep 0.1
+    end
+    
   rescue Interrupt
-    puts "\nExiting..."
+    puts "\nInterrupt received. Cleaning up..."
   ensure
     pids.each do |pid|
       if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
@@ -201,6 +211,7 @@ when "explore"
         Process.kill("TERM", pid) rescue nil
       end
     end
+    puts "OEIS Discovery Station shutdown complete."
   end
 when "analyze"
   if sequences[key]
