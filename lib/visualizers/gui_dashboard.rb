@@ -103,7 +103,7 @@ class GUIDashboard
   end
 
   def launch
-    window("OEIS Explorer v#{OEIS::VERSION}: Controls", 400, 800) {
+    window("OEIS Explorer v#{OEIS::VERSION}: Controls", 500, 800) {
       margined true
 
       vertical_box {
@@ -120,8 +120,7 @@ class GUIDashboard
             }
             
             horizontal_box {
-              stretchy false
-              label('Terms to show:')
+              label('Terms:') { stretchy false }
               entry {
                 text @num_terms.to_s
                 on_changed do |e|
@@ -134,6 +133,7 @@ class GUIDashboard
               }
               
               button('DELETE') {
+                stretchy false
                 on_clicked { delete_current_sequence }
               }
             }
