@@ -78,6 +78,30 @@ class GUIDashboard
     end
   end
 
+  def delete_current_sequence
+    data = @sequences[@current_display_name]
+    key = data[:key]
+    
+    msg = "Are you sure you want to PERMANENTLY delete '#{key}'?\n\nThis will remove:\n- sequences/#{key}.rb\n- docs/sequences/#{key}.md\n- .cache/#{key}.cache"
+    
+    if confirm("Confirm Deletion", msg)
+      # 1. Delete Files
+      File.delete(File.join(Dir.pwd, 'sequences', "#{key}.rb")) rescue nil
+      File.delete(File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")) rescue nil
+      File.delete(File.join(Dir.pwd, '.cache', "#{key}.cache")) rescue nil
+      
+      # 2. Update metadata cache so it doesn't reappear
+      cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
+      if File.exist?(cache_path)
+        catalog = JSON.parse(File.read(cache_path))
+        catalog.reject! { |s| s['key'] == key }
+        File.write(cache_path, catalog.to_json)
+      end
+
+      msg_box("Success", "Sequence '#{key}' has been deleted. Please restart the explorer to refresh the list.")
+    end
+  end
+
   def launch
     window("OEIS Explorer v#{OEIS::VERSION}: Controls", 400, 800) {
       margined true
@@ -95,16 +119,23 @@ class GUIDashboard
               end
             }
             
-            label('Terms to show:')
-            entry {
-              text @num_terms.to_s
-              on_changed do |e|
-                val = e.text.to_i
-                if val > 0
-                  @num_terms = val
-                  save_state
+            horizontal_box {
+              stretchy false
+              label('Terms to show:')
+              entry {
+                text @num_terms.to_s
+                on_changed do |e|
+                  val = e.text.to_i
+                  if val > 0
+                    @num_terms = val
+                    save_state
+                  end
                 end
-              end
+              }
+              
+              button('DELETE') {
+                on_clicked { delete_current_sequence }
+              }
             }
           }
         }
