@@ -19,13 +19,6 @@ end
 class RaylibExplorer
   include Raylib
 
-  # Theme
-  BG_DARK    = Color.new(20, 20, 25, 255)
-  SIDEBAR_BG = Color.new(30, 30, 40, 255)
-  ACCENT     = Color.new(0, 180, 255, 255)
-  TEXT_MAIN  = Color.new(240, 240, 250, 255)
-  TEXT_DIM   = Color.new(150, 150, 170, 255)
-
   SIDEBAR_W = 380.0
 
   def initialize
@@ -42,7 +35,25 @@ class RaylibExplorer
     @zoom_y = 1.0
     
     $stdout.sync = true
-    puts "[Station] Initialized v#{OEIS::VERSION}"
+    puts "[Station] Initialized Explorer v#{OEIS::VERSION}"
+  end
+
+  # Safe Color Factory for Windows FFI
+  def make_color(r, g, b, a=255)
+    c = Raylib::Color.new
+    c[:r], c[:g], c[:b], c[:a] = r, g, b, a
+    c
+  end
+
+  def init_theme
+    @bg_dark    = make_color(20, 20, 25)
+    @sidebar_bg = make_color(30, 30, 40)
+    @accent     = make_color(0, 180, 255)
+    @text_main  = make_color(240, 240, 250)
+    @text_dim   = make_color(150, 150, 170)
+    @axis_c     = make_color(60, 60, 70)
+    @hover_bg   = make_color(255, 255, 255, 20)
+    @panel_bg   = make_color(15, 15, 20)
   end
 
   def load_catalog
@@ -58,9 +69,22 @@ class RaylibExplorer
           display: "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
         }
       end
-      data.sort_by { |s| -s[:score] }
+      data.sort_by { |s| -(s[:score] || 0) }
     rescue
       []
+    end
+  end
+
+  def load_sequence_class(file)
+    existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
+    begin
+      require File.expand_path(file)
+      new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+      key = File.basename(file, '.rb').gsub('_', '')
+      klass = new_classes.find { |c| c.to_s.downcase.include?(key) }
+      klass || (new_classes - existing_classes).first
+    rescue
+      nil
     end
   end
 
@@ -70,12 +94,7 @@ class RaylibExplorer
     return unless File.exist?(file)
 
     begin
-      # Find class
-      existing = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-      require File.expand_path(file)
-      found = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-      klass = found.find { |c| c.to_s.downcase.include?(key.gsub('_', '')) } || (found - existing).first
-      
+      klass = load_sequence_class(file)
       if klass
         @instance = klass.new
         @terms = @instance.generate(@num_terms)
@@ -84,7 +103,7 @@ class RaylibExplorer
         @doc_lines = File.exist?(doc_path) ? File.read(doc_path).lines.reject{|l| l.start_with?("#")}.first(25).map(&:strip) : ["No docs."]
         
         auto_fit_all()
-        puts "[Station] Loaded #{key}"
+        puts "[Station] Loaded: #{key}"
       end
     rescue => e
       puts "Error loading #{key}: #{e.message}"
@@ -111,6 +130,8 @@ class RaylibExplorer
     SetConfigFlags(FLAG_WINDOW_RESIZABLE)
     InitWindow(1600, 950, "OEIS Discovery Station v#{OEIS::VERSION}")
     SetTargetFPS(60)
+    
+    init_theme()
 
     # Initial Load
     load_sequence(@sequences[0][:key]) if @sequences.any?
@@ -141,10 +162,8 @@ class RaylibExplorer
         end
       end
     else
-      # Graph Interaction
       if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-        @dragging = true
-        @last_mouse_x = mx
+        @dragging = true; @last_mouse_x = mx
       elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT)
         @dragging = false
       end
@@ -168,13 +187,12 @@ class RaylibExplorer
 
   def draw
     BeginDrawing()
-    ClearBackground(BG_DARK)
+    ClearBackground(@bg_dark)
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
 
     # --- GRAPH ---
-    axis_color = Color.new(60, 60, 70, 255)
-    DrawLine(SIDEBAR_W.to_i, @offset_y.to_i, w.to_i, @offset_y.to_i, axis_color)
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, axis_color)
+    DrawLine(SIDEBAR_W.to_i, @offset_y.to_i, w.to_i, @offset_y.to_i, @axis_c)
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h.to_i, @axis_c)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
@@ -183,20 +201,20 @@ class RaylibExplorer
         next if x2 < SIDEBAR_W || x1 > w
         y1 = @offset_y - @terms[i-1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, ACCENT)
+        DrawLineEx(Vector2.new(x1, y1), Vector2.new(x2, y2), 1.5, @accent)
       end
     end
 
     # --- SIDEBAR ---
-    DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, SIDEBAR_BG)
+    DrawRectangle(0, 0, SIDEBAR_W.to_i, h.to_i, @sidebar_bg)
     DrawText("EXPLORER", 30, 30, 24, WHITE)
 
     BeginScissorMode(0, 80, SIDEBAR_W.to_i, (h - 450).to_i)
       list_y = 80.0 + @scroll_offset
       @sequences.each_with_index do |s, i|
-        color = (i == @current_idx) ? WHITE : TEXT_DIM
+        color = (i == @current_idx) ? WHITE : @text_dim
         if i == @current_idx
-          DrawRectangle(20, list_y.to_i - 2, (SIDEBAR_W - 40).to_i, 25, Color.new(255, 255, 255, 20))
+          DrawRectangle(20, list_y.to_i - 2, (SIDEBAR_W - 40).to_i, 25, @hover_bg)
         end
         DrawText(s[:display], 30, list_y.to_i, 16, color)
         list_y += 30
@@ -205,20 +223,17 @@ class RaylibExplorer
 
     # Analysis Box
     panel_y = h - 350
-    DrawRectangle(20, panel_y.to_i, (SIDEBAR_W - 40).to_i, 330, BG_DARK)
-    DrawText("ANALYSIS", 35, panel_y.to_i + 15, 14, ACCENT)
+    DrawRectangle(20, panel_y.to_i, (SIDEBAR_W - 40).to_i, 330, @panel_bg)
+    DrawText("ANALYSIS", 35, panel_y.to_i + 15, 14, @accent)
     y_ptr = panel_y + 45
     (@doc_lines || []).each do |line|
       next if line.strip.empty?
-      DrawText(line[0..45], 35, y_ptr.to_i, 11, TEXT_DIM)
+      DrawText(line[0..45], 35, y_ptr.to_i, 11, @text_dim)
       y_ptr += 15
       break if y_ptr > h - 40
     end
 
-    # Header
-    name = @instance ? @instance.name : "Select"
-    DrawText("#{name.upcase} | #{@num_terms} TERMS", SIDEBAR_W.to_i + 30, 15, 20, TEXT_MAIN)
-
+    DrawText(@instance ? @instance.name.upcase : "Select", SIDEBAR_W.to_i + 30, 15, 22, TEXT_MAIN)
     EndDrawing()
   end
 end
