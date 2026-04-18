@@ -40,29 +40,27 @@ class RaylibViewer
     map = {}
     Dir.glob(File.join(Dir.pwd, 'sequences', '*.rb')).each do |file|
       key = File.basename(file, '.rb')
-      class_name = key.split('_').map(&:capitalize).join
       begin
         require file
-        map[key] = Object.const_get(class_name)
-      rescue
-        # skip
+        # Dynamically find the subclass of OEISSequence defined in the file
+        klass = ObjectSpace.each_object(Class).find { |c| c < OEISSequence && c.to_s.downcase.include?(key.gsub('_', '')) }
+        map[key] = klass if klass
+      rescue => e
+        puts "[VIEWER] Error loading #{key}: #{e.message}"
       end
     end
     map
   end
 
   def watchdog
-    # If the parent lock is gone, we die
     unless File.exist?(LOCK_FILE)
       CloseWindow()
       exit(0)
     end
 
-    # Check if parent PID is still alive (Windows specific)
     begin
       parent_pid = File.read(LOCK_FILE).to_i
       if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        # Use tasklist to see if PID is still active
         alive = `tasklist /FI "PID eq #{parent_pid}" /NH`.include?(parent_pid.to_s)
         unless alive
           CloseWindow()
@@ -89,38 +87,36 @@ class RaylibViewer
       return
     end
 
-    # TRIGGER BY VERSION
     return unless state && state['version'].to_i > @last_version
     @last_version = state['version'].to_i
 
+    if state['exit']
+      CloseWindow()
+      exit(0)
+    end
+    
     key = state['key'].to_s
     num = state['num_terms'].to_i
     
-    # OPTIMIZATION: If only term count changed, don't re-instantiate or reload disk
-    if key == @current_key && num != @num_terms
-      puts "[VIEWER] Appending Data: #{key} (+#{num - @num_terms} terms)"
+    # OPTIMIZATION: Instance Persistence
+    if key == @current_key && @instance
+      puts "[VIEWER] Syncing terms: #{num}"
       @num_terms = num
       @terms = @instance.generate(@num_terms)
       auto_fit_all()
-      return
-    end
-
-    # Otherwise, it's a new sequence: full reload
-    klass = @sequences[key]
-    if klass
+    elsif klass = @sequences[key]
       puts "[VIEWER] RELOADING: #{key} | Terms: #{num}"
       @current_key = key
       @num_terms = num
       @instance = klass.new
       @terms = @instance.generate(@num_terms)
-      
-      # SNAP TO VIEW
       auto_fit_all()
     end
   end
 
   def auto_fit_all
-    return if @terms.empty?
+    return if @terms.nil? || @terms.empty?
+    
     max_v = @terms.max
     min_v = @terms.min
     range_y = (max_v - min_v).to_f
@@ -137,12 +133,34 @@ class RaylibViewer
     @status = "Fit v#{@last_version}: [#{@terms.size} terms]"
   end
 
+  def auto_fit_y_visible
+    return if @terms.nil? || @terms.empty?
+    
+    start_i = [((- @offset_x) / @zoom_x).floor, 0].max
+    end_i = [((W - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+    
+    return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
+    
+    slice = @terms[start_i..end_i]
+    return if slice.nil? || slice.empty?
+    
+    max_v = slice.max
+    min_v = slice.min
+    range_y = (max_v - min_v).to_f
+    range_y = 1.0 if range_y == 0
+    
+    padding_y = 100.0 
+    @zoom_y = (H - padding_y * 2) / range_y
+    @offset_y = padding_y + (max_v * @zoom_y)
+  end
+
   def run
     InitWindow(W, H, "OEIS Discovery Viewer v#{OEIS::VERSION}")
     SetTargetFPS(60)
 
     until WindowShouldClose()
       sync_state()
+      auto_fit_y_visible() unless IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetMouseWheelMove() != 0
       update()
       draw()
     end

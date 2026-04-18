@@ -17,10 +17,13 @@ def load_sequences
 end
 
 def load_sequence_class(file)
-  key = File.basename(file, '.rb')
-  class_name = key.split('_').map(&:capitalize).join
+  existing_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
   require File.expand_path(file)
-  Object.const_get(class_name)
+  new_classes = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+  # Find the class that matches the filename or the first new one
+  key = File.basename(file, '.rb').gsub('_', '')
+  klass = new_classes.find { |c| c.to_s.downcase.include?(key) }
+  klass || (new_classes - existing_classes).first
 end
 
 def build_catalog(sequences, force: false)
