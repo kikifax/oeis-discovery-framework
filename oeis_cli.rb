@@ -3,6 +3,7 @@ require 'prime'
 require_relative 'lib/sequence_template'
 
 $stdout.sync = true # Ensure all terminal output is shown instantly
+puts "OEIS Discovery Framework v#{OEIS::VERSION}"
 
 # Dynamically load sequence keys from the sequences/ directory
 def load_sequences
