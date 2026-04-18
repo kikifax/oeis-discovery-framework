@@ -179,38 +179,27 @@ when "list"
 when "build-catalog"
   build_catalog(sequences, force: true)
 when "explore"
-  # Reset state on start
+  # Clean state
   File.delete('.cache/gui_state.json') rescue nil
-
-  puts "[1/3] Syncing metadata..."
   build_catalog(sequences)
 
-  puts "[2/3] Preparing windows..."
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
 
-  puts "[3/3] Launching Discovery Station..."
-  puts "\n🚀 Discovery Station active! v#{OEIS::VERSION}"
+  puts "\n🚀 Discovery Station starting! v#{OEIS::VERSION}"
   puts ">> Press Ctrl+C in this console to exit."
 
-  pids = []
-  begin
-    # Spawn both sharing the console explicitly
-    pids << Process.spawn(dashboard_cmd, :out => :out, :err => :err)
-    pids << Process.spawn(viewer_cmd, :out => :out, :err => :err)
+  # Launch Dashboard in background thread
+  # Using 'system' inside a thread is the most reliable way to see output on Windows
+  t = Thread.new { system(dashboard_cmd) }
 
-    # Wait for the viewer primarily
-    Process.wait(pids.last)
-  rescue Interrupt
-    puts "\nShutting down..."
-  ensure
-    pids.each do |pid|
-      if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        system("taskkill /F /PID #{pid} /T >NUL 2>&1")
-      else
-        Process.kill("TERM", pid) rescue nil
-      end
-    end
+  # Launch Viewer in main foreground
+  system(viewer_cmd)
+
+  # Cleanup
+  t.kill rescue nil
+  if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
+    system("taskkill /F /IM ruby.exe /T >NUL 2>&1")
   end
 when "analyze"
   if sequences[key]
