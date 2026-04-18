@@ -1,5 +1,7 @@
 require 'optparse'
 require 'prime'
+require 'json'
+require 'fileutils'
 require_relative 'lib/sequence_template'
 
 $stdout.sync = true # Ensure all terminal output is shown instantly
@@ -33,8 +35,10 @@ def list_sequences(sequences)
   all_data = []
   sequences.each do |key, file|
     klass = load_sequence_class(file)
-    instance = klass.new
-    all_data << { key: key, rank: instance.rank, name: instance.name }
+    if klass
+      instance = klass.new
+      all_data << { key: key, rank: instance.rank, name: instance.name }
+    end
   end
 
   # Group by rank
@@ -58,57 +62,51 @@ def build_catalog(sequences, force: false)
   # Check if we can skip the heavy scan
   if !force && File.exist?(cache_path)
     cache_time = File.mtime(cache_path)
-    # Are any .rb files newer than the cache?
     needs_update = sequences.values.any? { |f| File.mtime(f) > cache_time }
-    unless needs_update
-      return # Cache is fresh, do nothing
-    end
+    return unless needs_update
     puts "[1/4] Detecting changes in sequences... Re-syncing cache."
   end
 
   FileUtils.mkdir_p(docs_dir)
   FileUtils.mkdir_p('.cache')
   
-  existing_catalog = File.exist?(cache_path) ? JSON.parse(File.read(cache_path)) : []
+  existing_catalog = File.exist?(cache_path) ? (JSON.parse(File.read(cache_path)) rescue []) : []
   catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
   
   catalog_data = []
-  
-  # Load only what we need to minimize 'require' calls
+  class_map = {}
+
   sequences.each do |key, file|
+    klass = load_sequence_class(file)
+    next unless klass
+    class_map[key] = klass
+    instance = klass.new
     doc_path = File.join(docs_dir, "#{key}.md")
+    
     existing_version = 0
     if File.exist?(doc_path)
       v_line = File.readlines(doc_path).find { |l| l.start_with?("Doc Version:") }
       existing_version = v_line.split(":").last.to_i if v_line
     end
-
+    
     cached = catalog_map[key]
-    # Skip analysis if cached AND file hasn't changed AND doc version matches
     if cached && File.mtime(file) < File.mtime(cache_path) && existing_version >= DOCUMENTER_VERSION
       catalog_data << cached
-      next
+    else
+      puts "Analyzing #{key}..."
+      report = instance.analyze(1000)
+      catalog_data << {
+        key: key,
+        name: instance.name,
+        rank: instance.rank,
+        formula: instance.formula,
+        fitness_score: report[:fitness_score]
+      }
     end
-
-    # Perform slow analysis only for new/changed files
-    puts "Scanning: #{key}..."
-    klass = load_sequence_class(file)
-    next unless klass
-    instance = klass.new
-    report = instance.analyze(1000)
-    
-    data = {
-      key: key,
-      name: instance.name,
-      rank: instance.rank,
-      formula: instance.formula,
-      fitness_score: report[:fitness_score]
-    }
-    catalog_data << data
 
     if existing_version < DOCUMENTER_VERSION
       puts "Updating documentation for #{key}..."
-      # (Doc generation logic remains same...)
+      report ||= instance.analyze(1000)
       File.open(doc_path, "w") do |f|
         f.puts "Doc Version: #{DOCUMENTER_VERSION}"
         f.puts "# #{instance.name}"
@@ -135,32 +133,27 @@ def build_catalog(sequences, force: false)
 
   File.write(cache_path, catalog_data.to_json)
 
-  # 2. Update the Main CATALOG.md Index
   File.open("CATALOG.md", "w") do |f|
     f.puts "# OEIS Discovery Catalog"
     f.puts "\nThis catalog provides an index of all sequences implemented in this framework."
-    
     ["High Potential", "Medium Potential", "Experimental"].each do |rank|
       f.puts "\n## #{rank} Sequences"
       f.puts "\n| Name | Formula | Doc |"
       f.puts "| :--- | :--- | :--- |"
-      
-      # Sort by fitness score in the catalog too
-      catalog_data.select { |s| s[:rank] == rank || s['rank'] == rank }
-                  .sort_by { |s| -(s[:fitness_score] || s['fitness_score']) }
+      catalog_data.select { |s| s['rank'] == rank || s[:rank] == rank }
+                  .sort_by { |s| -(s['fitness_score'] || s[:fitness_score]) }
                   .each do |s|
-        f.puts "| #{s[:name] || s['name']} | `#{s[:formula] || s['formula']}` | [View Full Report](docs/sequences/#{s[:key] || s['key']}.md) |"
+        f.puts "| #{s['name'] || s[:name]} | `#{s['formula'] || s[:formula]}` | [View Full Report](docs/sequences/#{s['key'] || s[:key]}.md) |"
       end
     end
   end
+  puts "CATALOG.md and individual docs have been updated."
 end
 
 sequences = load_sequences
 
-options = {}
 OptionParser.new do |opts|
   opts.banner = "OEIS Discovery Framework v#{OEIS::VERSION}\nUsage: ruby oeis_cli.rb [options] [command] [sequence_key] [count]"
-  
   opts.on("-h", "--help", "Prints this help") do
     puts opts
     puts "\nCommands:"
@@ -168,10 +161,10 @@ OptionParser.new do |opts|
     puts "  generate <key> <n>  Print the first n terms of a sequence"
     puts "  analyze <key> <n>   Perform statistical analysis and fitness scoring"
     puts "  plot <key> <n>      Launch terminal plotter for first n terms"
-    puts "  gui <key> <n>       Launch graphical explorer for first n terms"
-    puts "  explore             Launch high-performance GPU visualizer"
+    puts "  gui               Launch graphical dashboard explorer"
+    puts "  explore           Launch high-performance GPU visualizer"
     puts "  bfile <key> <n>     Generate a b-file in b_files/ directory"
-    puts "  build-catalog     Auto-generate CATALOG.md"
+    puts "  build-catalog     Force rebuild of CATALOG.md and docs"
     exit
   end
 end.parse!
@@ -186,114 +179,74 @@ when "list"
 when "build-catalog"
   build_catalog(sequences, force: true)
 when "explore"
-  # 1. Build catalog first to ensure cache exists (using lazy sync)
   puts "[1/4] Checking metadata cache..."
   build_catalog(sequences)
-
-  puts "[2/4] Initializing Dashboard..."
   dashboard_cmd = "bundle exec ruby lib/visualizers/gui_dashboard.rb"
   viewer_cmd = "bundle exec ruby lib/visualizers/raylib_viewer.rb"
-
-  # On Windows, we need to be very careful with process management
-  # We will use Threads to keep the console responsive
-  threads = []
-
-  puts "[3/4] Launching High-Performance Viewer..."
+  puts "[2/4] Initializing Dashboard..."
+  puts "[3/4] Launching Viewer..."
   puts "\n🚀 Discovery Station starting! Press Ctrl+C here to quit."
-
   pids = []
   begin
-    # Use spawn to get PIDs for reliable cleanup
     pids << spawn(dashboard_cmd)
     pids << spawn(viewer_cmd)
-
-    # Wait for the main viewer process
     Process.wait(pids.last)
   rescue Interrupt
-    puts "\nExiting OEIS Discovery Station..."
+    puts "\nExiting..."
   ensure
     pids.each do |pid|
       if RUBY_PLATFORM =~ /mswin|msys|mingw|cygwin/
-        # /T kills the child processes (like bundle/ruby) as well
         system("taskkill /F /PID #{pid} /T >NUL 2>&1")
       else
         Process.kill("TERM", pid) rescue nil
       end
     end
   end
-when "generate", "plot", "gui", "bfile", "analyze"
-  unless sequences[key]
-    puts "Error: Sequence '#{key}' not found. Use 'ruby oeis_cli.rb list' to see available keys."
-    exit 1
-  end
-  
-  case command
-  when "analyze"
+when "analyze"
+  if sequences[key]
     klass = load_sequence_class(sequences[key])
     instance = klass.new
+    report = instance.analyze(count)
     puts "=========================================================="
     puts "      FULL OEIS FITNESS REPORT: #{instance.name}"
     puts "=========================================================="
-    report = instance.analyze(count)
-    
     puts "\n[ 1. BASIC STATISTICS ]"
     puts "Terms Generated:  #{report[:stats][:terms]}"
     puts "Value Range:      #{report[:stats][:min]} to #{report[:stats][:max]}"
     puts "Average Value:    #{report[:stats][:avg]}"
     puts "Growth Pattern:   #{report[:stats][:growth_type]}"
-    puts "Is Periodic?      #{report[:stats][:is_periodic] ? 'YES (Warning: Low Fitness)' : 'No'}"
-    
     puts "\n[ 2. DYNAMIC BEHAVIOR ]"
     puts "Average Swing:    #{report[:dynamics][:avg_swing]}"
     puts "Max Step Swing:   #{report[:dynamics][:max_swing]}"
-    puts "Erraticness:      #{report[:dynamics][:erraticness]} (SD of swings)"
-    puts "Significant Drops:#{report[:dynamics][:resets]} (>50% reset)"
-    
+    puts "Erraticness:      #{report[:dynamics][:erraticness]}"
+    puts "Significant Drops:#{report[:dynamics][:resets]}"
     puts "\n[ 3. COMPOSITION ]"
     puts "Prime Density:    #{(report[:composition][:prime_density] * 100).round(2)}%"
-    puts "Zero Density:     #{(report[:composition][:zero_density] * 100).round(2)}%"
-    puts "Uniqueness Ratio: #{(report[:composition][:unique_ratio] * 100).round(2)}%"
-    
-    puts "\n[ 4. SCORING BREAKDOWN ]"
-    puts "Diversity Score:  #{report[:scoring][:diversity].round(1)} / 25"
-    puts "Activity Score:   #{report[:scoring][:activity].round(1)} / 25"
-    puts "Novelty Score:    #{report[:scoring][:novelty].round(1)} / 25"
-    puts "Longevity Score:  #{report[:scoring][:longevity].round(1)} / 25"
-    
-    puts "\n----------------------------------------------------------"
+    puts "Unique Ratio:     #{(report[:composition][:unique_ratio] * 100).round(2)}%"
+    puts "\n[ 4. SCORING ]"
     printf("FINAL FITNESS SCORE: %.1f / 100\n", report[:fitness_score])
-    puts "----------------------------------------------------------"
-    
-    case report[:fitness_score]
-    when 0..30 then puts "STATUS: POOR - High probability of being trivial or periodic."
-    when 31..60 then puts "STATUS: FAIR - Interesting behavior, but may lack enough 'surprise'."
-    when 61..85 then puts "STATUS: STRONG - Highly recommended for OEIS search/submission."
-    else puts "STATUS: ELITE - Exceptional mathematical profile. Submit ASAP."
-    end
     puts "=========================================================="
-  when "generate"
+  else
+    puts "Error: Sequence '#{key}' not found."
+  end
+when "generate"
+  if sequences[key]
     klass = load_sequence_class(sequences[key])
-    instance = klass.new
-    puts "Generating #{count} terms for #{instance.name}..."
-    puts instance.generate(count).join(", ")
-  when "plot"
+    puts klass.new.generate(count).join(", ")
+  end
+when "plot"
+  if sequences[key]
     require_relative 'lib/visualizers/oeis_plotter'
     klass = load_sequence_class(sequences[key])
-    instance = klass.new
-    terms = instance.generate(count)
-    OEISPlotter.plot(terms)
-  when "gui"
-    # The new GUI has a combobox, so the key is optional
-    system "bundle exec ruby lib/visualizers/oeis_gui.rb"
-  when "bfile"
+    OEISPlotter.plot(klass.new.generate(count))
+  end
+when "bfile"
+  if sequences[key]
     klass = load_sequence_class(sequences[key])
     instance = klass.new
-    puts "Generating b-file for #{instance.name} (up to a(#{count-1}))..."
     terms = instance.generate(count)
     path = File.join(__dir__, 'b_files', "b_#{key}.txt")
-    File.open(path, "w") do |f|
-      terms.each_with_index { |v, i| f.puts "#{i} #{v}" }
-    end
+    File.open(path, "w") { |f| terms.each_with_index { |v, i| f.puts "#{i} #{v}" } }
     puts "Saved to #{path}"
   end
 else
