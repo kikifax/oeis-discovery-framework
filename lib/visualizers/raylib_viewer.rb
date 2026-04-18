@@ -96,6 +96,16 @@ class RaylibViewer
     key = state['key'].to_s
     num = state['num_terms'].to_i
     
+    # OPTIMIZATION: If only term count changed, don't re-instantiate or reload disk
+    if key == @current_key && num != @num_terms
+      puts "[VIEWER] Appending Data: #{key} (+#{num - @num_terms} terms)"
+      @num_terms = num
+      @terms = @instance.generate(@num_terms)
+      auto_fit_all()
+      return
+    end
+
+    # Otherwise, it's a new sequence: full reload
     klass = @sequences[key]
     if klass
       puts "[VIEWER] RELOADING: #{key} | Terms: #{num}"

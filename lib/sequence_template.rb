@@ -6,6 +6,17 @@ require_relative 'version'
 class OEISSequence
   attr_reader :name, :description, :author, :rank, :formula, :oeis_id, :terms
 
+  # SHARED CACHE: Once any sequence finds a prime, all others can use it instantly.
+  PRIME_CACHE = []
+  PRIME_GEN = Prime.each
+
+  def self.get_prime(k)
+    while PRIME_CACHE.size < k
+      PRIME_CACHE << PRIME_GEN.next
+    end
+    PRIME_CACHE[k-1]
+  end
+
   def version
     OEIS::VERSION
   end
