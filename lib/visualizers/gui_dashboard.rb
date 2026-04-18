@@ -22,7 +22,7 @@ class GUIDashboard
     cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
     seqs = {}
     if File.exist?(cache_path)
-      data = JSON.parse(File.read(cache_path))
+      data = JSON.parse(File.read(cache_path)) rescue []
       data.each do |s|
         display_name = "[#{s['fitness_score'].to_i.to_s.rjust(3)}] #{s['name']}"
         seqs[display_name] = { key: s['key'], score: s['fitness_score'] }
@@ -43,11 +43,7 @@ class GUIDashboard
       timestamp: Time.now.to_f
     }
     
-    begin
-      File.write(STATE_FILE, state.to_json)
-    rescue
-      # Silent fail for lock
-    end
+    File.write(STATE_FILE, state.to_json) rescue nil
     update_doc_display(data[:key])
   end
 
@@ -62,18 +58,25 @@ class GUIDashboard
   def delete_current_sequence
     data = @sequences[@current_display_name]
     key = data[:key]
-    msg = "PERMANENTLY delete '#{key}'?\n\n- sequences/#{key}.rb\n- docs/sequences/#{key}.md\n- .cache/#{key}.cache"
     
-    if confirm("Confirm", msg)
-      File.delete(File.join(Dir.pwd, 'sequences', "#{key}.rb")) rescue nil
-      File.delete(File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")) rescue nil
-      File.delete(File.join(Dir.pwd, '.cache', "#{key}.cache")) rescue nil
-      msg_box("Deleted", "Please restart the station.")
+    # 1. Delete Files
+    File.delete(File.join(Dir.pwd, 'sequences', "#{key}.rb")) rescue nil
+    File.delete(File.join(Dir.pwd, 'docs', 'sequences', "#{key}.md")) rescue nil
+    File.delete(File.join(Dir.pwd, '.cache', "#{key}.cache")) rescue nil
+    
+    # 2. Update catalog so it disappears from GUI
+    cache_path = File.join(Dir.pwd, '.cache', 'catalog.json')
+    if File.exist?(cache_path)
+      catalog = JSON.parse(File.read(cache_path)) rescue []
+      catalog.reject! { |s| s['key'] == key }
+      File.write(cache_path, catalog.to_json)
     end
+
+    msg_box('Success', "Sequence '#{key}' deleted. Please restart.")
   end
 
   def launch
-    window("OEIS Explorer v#{OEIS::VERSION}: Controls", 450, 800) {
+    @main_window = window("OEIS Explorer v#{OEIS::VERSION}: Controls", 450, 800) {
       margined true
       vertical_box {
         group('Sequence Selection') {
@@ -114,11 +117,9 @@ class GUIDashboard
         }
       }
       
-      on_closing do
-        File.delete(".cache/station.lock") rescue nil
-        File.write(STATE_FILE, {exit: true, timestamp: Time.now.to_f}.to_json) rescue nil
-      end
-    }.show
+      on_closing { File.write(STATE_FILE, {exit: true, timestamp: Time.now.to_f}.to_json) rescue nil }
+    }
+    @main_window.show
     update_doc_display(@sequences[@current_display_name][:key])
   end
 end
