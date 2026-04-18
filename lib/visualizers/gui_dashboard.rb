@@ -6,9 +6,10 @@ require_relative '../sequence_template'
 class GUIDashboard
   include Glimmer
 
-  STATE_FILE = '.oeis_state.json'
+  STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
 
   def initialize
+    FileUtils.mkdir_p(File.dirname(STATE_FILE))
     @sequences = load_all_sequences
     @current_display_name = @sequences.keys.first
     @num_terms = 2000
@@ -42,7 +43,16 @@ class GUIDashboard
       num_terms: @num_terms,
       timestamp: Time.now.to_f
     }
-    File.write(STATE_FILE, state.to_json)
+    
+    # Robust write to handle temporary Windows file locks
+    begin
+      File.write(STATE_FILE, state.to_json)
+    rescue Errno::EACCES
+      # If locked, wait 50ms and try once more
+      sleep 0.05
+      File.write(STATE_FILE, state.to_json) rescue nil
+    end
+
     update_doc_display(data[:key])
   end
 

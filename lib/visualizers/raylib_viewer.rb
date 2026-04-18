@@ -19,7 +19,7 @@ end
 include Raylib
 
 class RaylibViewer
-  STATE_FILE = '.oeis_state.json'
+  STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
 
   def initialize
     @current_key = nil
