@@ -22,7 +22,7 @@ class RaylibExplorer
   SIDEBAR_W = 380
 
   def initialize
-    puts ">>> [STATION] STARTING v1.5.5 <<<"
+    puts ">>> [STATION] STARTING v1.5.6 (STABLE) <<<"
     STDOUT.flush
     @sequences = load_catalog
     @current_idx = 0
@@ -38,9 +38,15 @@ class RaylibExplorer
     @zoom_x = 1.0
     @zoom_y = 1.0
     
+    # PRE-ALLOCATE STRUCTS (NEVER RE-ALLOCATE IN DRAW)
+    @header_pos = Raylib::Vector2.new
+    @header_pos[:x] = (SIDEBAR_W + 30).to_f
+    @header_pos[:y] = 20.0
+    
     $stdout.sync = true
   end
 
+  # FFI-SAFE COLOR FACTORY
   def safe_color(r, g, b, a=255)
     c = Raylib::Color.new
     c[:r], c[:g], c[:b], c[:a] = r, g, b, a
@@ -49,16 +55,17 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark    = safe_color(20, 20, 24)
-    @sidebar_bg = Raylib::GOLD # SYNC TEST
+    @sidebar_bg = Raylib::ORANGE # SYNC TEST
     @accent     = safe_color(0, 150, 255)
     @text_main  = Raylib::WHITE
-    @text_dim   = Raylib::LIGHTGRAY
+    @text_dim   = Raylib::BLACK
 
-    win_f = "C:\\Windows\\Fonts\\arial.ttf"
+    win_f = "C:\\Windows\\Fonts\\segoeui.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 96, nil, 0)
       if @font && @font.texture.id > 0
         SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR)
+        puts "[STATION] UI Font: Segoe UI active."
       end
     end
     @font ||= GetFontDefault()
@@ -173,15 +180,17 @@ class RaylibExplorer
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
-        x1, x2 = @offset_x + (i - 1) * @zoom_x, @offset_x + i * @zoom_x
+        x1 = @offset_x + (i - 1) * @zoom_x
+        x2 = @offset_x + i * @zoom_x
         next if x2 < SIDEBAR_W || x1 > w
-        y1, y2 = @offset_y - @terms[i-1] * @zoom_y, @offset_y - @terms[i] * @zoom_y
+        y1 = @offset_y - @terms[i-1] * @zoom_y
+        y2 = @offset_y - @terms[i] * @zoom_y
         DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
       end
     end
 
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    DrawText("STATION v1.5.5", 30, 30, 24, BLACK)
+    DrawText("STATION v#{OEIS::VERSION}", 30, 30, 24, BLACK)
 
     BeginScissorMode(0, 90, SIDEBAR_W, h - 100)
       list_y = 100.0 + @scroll_offset
@@ -195,8 +204,9 @@ class RaylibExplorer
       end
     EndScissorMode()
 
+    # Title Header (SAFE CALL - NO ALLOCATIONS)
     name = @instance ? @instance.name.upcase : "SELECT"
-    DrawTextEx(@font, name, Vector2.new(SIDEBAR_W + 30, 20), 28.0, 1.0, WHITE)
+    DrawTextEx(@font, name, @header_pos, 28.0, 1.0, WHITE)
     
     terms_t = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
     DrawText(terms_t, w - 250, 25, 20, @edit_mode ? RED : WHITE)
@@ -205,7 +215,7 @@ class RaylibExplorer
 
   def run
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI)
-    InitWindow(1600, 950, "OEIS Station v1.5.5")
+    InitWindow(1600, 950, "OEIS Station v#{OEIS::VERSION}")
     SetTargetFPS(60)
     init_theme()
     load_sequence(@sequences[0][:key]) if @sequences.any?
