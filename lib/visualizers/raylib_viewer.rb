@@ -20,23 +20,21 @@ class RaylibViewer
   include Raylib
 
   STATE_FILE = File.join(Dir.pwd, '.cache', 'gui_state.json')
-  WIN_W = 1600
-  WIN_H = 900
 
   def initialize
     @current_key = nil
-    @num_terms = 0
+    @num_terms = -1 # Start at -1 to force first sync
     @last_sync = 0.0
     @terms = []
     
-    @offset_x = 50.0
-    @offset_y = 450.0
-    @zoom_x = 0.2
-    @zoom_y = 0.01
+    # View State (will be set by auto_fit)
+    @offset_x = 0.0
+    @offset_y = 0.0
+    @zoom_x = 1.0
+    @zoom_y = 1.0
     
     @dragging = false
     @last_mouse_x = 0.0
-    @last_mouse_y = 0.0
 
     @sequences = load_sequence_map
   end
@@ -62,21 +60,23 @@ class RaylibViewer
       return
     end
 
-    return unless state && state['timestamp'] > @last_sync
-    
-    # Update Sync Timestamp
-    @last_sync = state['timestamp']
+    # Only sync if timestamp is new
+    return unless state && state['timestamp'].to_f > @last_sync
+    @last_sync = state['timestamp'].to_f
 
     if state['exit']
       CloseWindow()
       exit(0)
     end
     
+    new_key = state['key'].to_s
+    new_num = state['num_terms'].to_i
+    
     # If key OR term count changed, we need a hard re-fit
-    if state['key'] != @current_key || state['num_terms'] != @num_terms
-      puts "Re-Scaling: #{state['key']} for #{state['num_terms']} terms..."
-      @current_key = state['key']
-      @num_terms = state['num_terms']
+    if new_key != @current_key || new_num != @num_terms
+      puts "Syncing Data: #{new_key} (#{new_num} terms)"
+      @current_key = new_key
+      @num_terms = new_num
       
       klass = @sequences[@current_key]
       if klass
@@ -90,29 +90,35 @@ class RaylibViewer
   def auto_fit_all
     return if @terms.nil? || @terms.empty?
     
+    win_w = GetScreenWidth().to_f
+    win_h = GetScreenHeight().to_f
+    
     # 1. Y-Fit (Full range)
     max_v = @terms.max
     min_v = @terms.min
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
-    padding_y = 60.0 
-    @zoom_y = (WIN_H - padding_y * 2) / range_y
+    padding_y = 80.0 
+    @zoom_y = (win_h - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
 
     # 2. X-Fit (Full length)
     padding_x = 50.0
-    @zoom_x = (WIN_W - padding_x * 2) / [@terms.size.to_f, 1].max
+    @zoom_x = (win_w - padding_x * 2) / [@terms.size.to_f, 1].max
     @offset_x = padding_x
     
-    puts "View Synced. ZoomX: #{@zoom_x.round(4)}, OffsetX: #{@offset_x}"
+    puts "View Synced. Width: #{win_w}, ZoomX: #{@zoom_x.round(4)}"
   end
 
   def auto_fit_y_visible
     return if @terms.nil? || @terms.empty?
     
-    # Find start and end index visible in the window (accounting for sidebar area if any)
+    win_w = GetScreenWidth().to_f
+    win_h = GetScreenHeight().to_f
+    
+    # Find start and end index visible in the window
     start_i = [((- @offset_x) / @zoom_x).floor, 0].max
-    end_i = [((WIN_W - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
+    end_i = [((win_w - @offset_x) / @zoom_x).ceil, @terms.size - 1].min
     
     return if start_i >= @terms.size || end_i < 0 || start_i >= end_i
     
@@ -124,13 +130,15 @@ class RaylibViewer
     range_y = (max_v - min_v).to_f
     range_y = 1.0 if range_y == 0
     
-    padding_y = 60.0 
-    @zoom_y = (WIN_H - padding_y * 2) / range_y
+    padding_y = 80.0 
+    @zoom_y = (win_h - padding_y * 2) / range_y
     @offset_y = padding_y + (max_v * @zoom_y)
   end
 
   def run
-    InitWindow(WIN_W, WIN_H, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
+    # Set config flags for resizable window
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
+    InitWindow(1600, 900, "OEIS Explorer v#{OEIS::VERSION}: Viewer")
     SetTargetFPS(60)
 
     until WindowShouldClose()
@@ -176,16 +184,19 @@ class RaylibViewer
   def draw
     BeginDrawing()
     ClearBackground(RAYWHITE)
+    
+    win_w = GetScreenWidth().to_f
+    win_h = GetScreenHeight().to_f
 
     # Draw Axes
-    DrawLine(0, @offset_y.to_i, WIN_W, @offset_y.to_i, LIGHTGRAY) 
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, WIN_H, LIGHTGRAY)
+    DrawLine(0, @offset_y.to_i, win_w.to_i, @offset_y.to_i, LIGHTGRAY) 
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, win_h.to_i, LIGHTGRAY)
 
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x
         x2 = @offset_x + i * @zoom_x
-        next if x2 < 0 || x1 > WIN_W
+        next if x2 < 0 || x1 > win_w
         
         y1 = @offset_y - @terms[i - 1] * @zoom_y
         y2 = @offset_y - @terms[i] * @zoom_y
@@ -197,8 +208,9 @@ class RaylibViewer
       end
     end
 
+    # Overlay
     name = @instance ? @instance.name : "None"
-    DrawRectangle(0, 0, WIN_W, 30, Fade(SKYBLUE, 0.5))
+    DrawRectangle(0, 0, win_w.to_i, 30, Fade(SKYBLUE, 0.5))
     DrawText("#{name} | Terms: #{@num_terms} | FPS: #{GetFPS()}", 10, 5, 20, DARKBLUE)
 
     EndDrawing()
