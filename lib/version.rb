@@ -1,3 +1,3 @@
 module OEIS
-  VERSION = "0.9.4"
+  VERSION = "0.4.2"
 end
