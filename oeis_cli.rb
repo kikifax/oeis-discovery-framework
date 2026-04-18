@@ -136,7 +136,8 @@ def build_catalog(sequences)
       f.puts "\n| Name | Formula | Doc |"
       f.puts "| :--- | :--- | :--- |"
       
-      sequences.sort.each do |key, klass|
+      sequences.sort.each do |key, file|
+        klass = load_sequence_class(file)
         instance = klass.new
         next unless instance.rank == rank
         f.puts "| #{instance.name} | `#{instance.formula}` | [View Full Report](docs/sequences/#{key}.md) |"
