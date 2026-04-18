@@ -48,6 +48,10 @@ def build_catalog(sequences)
   FileUtils.mkdir_p(docs_dir)
   FileUtils.mkdir_p('.cache')
   
+  cache_path = '.cache/catalog.json'
+  existing_catalog = File.exist?(cache_path) ? JSON.parse(File.read(cache_path)) : []
+  catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
+  
   catalog_data = []
 
   # 1. Update Individual Sequence Docs
@@ -62,19 +66,26 @@ def build_catalog(sequences)
       existing_version = v_line.split(":").last.to_i if v_line
     end
     
-    # We always need the analysis for the catalog JSON
-    report = instance.analyze(1000)
-    
-    catalog_data << {
-      key: key,
-      name: instance.name,
-      rank: instance.rank,
-      formula: instance.formula,
-      fitness_score: report[:fitness_score]
-    }
+    # Use cached score if available, otherwise analyze
+    cached = catalog_map[key]
+    if cached && existing_version >= DOCUMENTER_VERSION
+      report = { fitness_score: cached['fitness_score'], stats: { terms: 1000 } } # dummy report for doc
+      catalog_data << cached
+    else
+      puts "Analyzing #{key}..."
+      report = instance.analyze(1000)
+      catalog_data << {
+        key: key,
+        name: instance.name,
+        rank: instance.rank,
+        formula: instance.formula,
+        fitness_score: report[:fitness_score]
+      }
+    end
 
     if existing_version < DOCUMENTER_VERSION
-      puts "Updating documentation for #{key} (v#{existing_version} -> #{DOCUMENTER_VERSION})..."
+      puts "Updating documentation for #{key}..."
+      # ... (rest of doc generation code)
       
       File.open(doc_path, "w") do |f|
         f.puts "Doc Version: #{DOCUMENTER_VERSION}"

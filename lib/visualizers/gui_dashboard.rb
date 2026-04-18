@@ -119,7 +119,8 @@ class GUIDashboard
       }
       
       on_closing do
-        File.delete(STATE_FILE) if File.exist?(STATE_FILE)
+        # On Windows, deleting the file while the Viewer is polling it 
+        # causes a Permission Denied error. We'll just leave it.
       end
     }.show
     
