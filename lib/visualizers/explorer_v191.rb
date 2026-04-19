@@ -20,10 +20,12 @@ class RaylibExplorer
   include Raylib
 
   SIDEBAR_W = 420
+  MAX_INT = 2147483647
+  MIN_INT = -2147483648
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.9.0] ATOMIC SYNC STATION ACTIVE <<<"
+    puts ">>> [v1.9.1] RESTORATION STATION ACTIVE <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -51,8 +53,8 @@ class RaylibExplorer
   end
 
   def init_theme
-    @bg_dark      = safe_color(18, 18, 22)
-    @sidebar_bg   = Raylib::YELLOW # ELECTRIC YELLOW (v1.9.0 TEST)
+    @bg_dark      = safe_color(20, 20, 24)
+    @sidebar_bg   = safe_color(130, 40, 255) # ELECTRIC VIOLET (v1.9.1 TEST)
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(150, 150, 170)
@@ -90,16 +92,23 @@ class RaylibExplorer
     file = File.join(Dir.pwd, 'sequences', "#{key}.rb")
     return unless File.exist?(file)
     begin
-      existing = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
-      require File.expand_path(file)
-      new_c = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
-      klass = new_c.find { |c| c.to_s.downcase.include?(key.gsub('_','')) } || (new_c - existing).first
+      # FORCE RE-LOAD OF LOGIC
+      load File.expand_path(file)
+      klass_name = key.split('_').map(&:capitalize).join
+      klass = Object.const_get(klass_name) rescue nil
+      unless klass
+         new_c = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
+         klass = new_c.find { |c| c.to_s.downcase.include?(key.gsub('_','')) }
+      end
+      
       if klass
         @instance = klass.new
         @terms = []
         auto_fit_all(@target_terms)
+        puts "[v1.9.1] Loaded fresh logic: #{key}"
+        STDOUT.flush
       end
-    rescue; end
+    rescue => e; puts "Error: #{e.message}"; end
   end
 
   def pump_generation
@@ -128,6 +137,10 @@ class RaylibExplorer
     @offset_x = (SIDEBAR_W + 70).to_f
   end
 
+  def safe_i(val)
+    val.clamp(MIN_INT, MAX_INT).to_i
+  end
+
   def draw_text_safe(text, x, y, size, color)
     @vec_tmp[:x], @vec_tmp[:y] = x.to_f, y.to_f
     DrawTextEx(@font, text.to_s, @vec_tmp, size.to_f, 0.5, color)
@@ -136,9 +149,12 @@ class RaylibExplorer
   def update
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
+
+    # --- TOP LEVEL INPUT ---
     if IsKeyPressed(KEY_T)
       @edit_mode = true; @input_text = ""; return
     end
+    
     if @edit_mode
       char = GetCharPressed()
       while char > 0
@@ -153,10 +169,13 @@ class RaylibExplorer
       elsif IsKeyPressed(KEY_ESCAPE); @edit_mode = false; end
       return
     end
+
     if !@initialized_load && @sequences.any?
        load_sequence(@sequences[0][:key]); @initialized_load = true
     end
+
     pump_generation()
+
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       if mx < SIDEBAR_W
         if my > h - 60
@@ -176,6 +195,7 @@ class RaylibExplorer
         @dragging = true; @last_mx = mx.to_f
       end
     elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
+
     if @dragging; @offset_x += (mx.to_f - @last_mx); @last_mx = mx.to_f; end
     wheel = GetMouseWheelMove()
     if wheel != 0
@@ -196,20 +216,20 @@ class RaylibExplorer
 
     # GRAPH
     axis_c = safe_color(60,60,75)
-    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, axis_c)
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, axis_c)
+    DrawLine(safe_i(SIDEBAR_W), safe_i(@offset_y), safe_i(w), safe_i(@offset_y), axis_c)
+    DrawLine(safe_i(@offset_x), 0, safe_i(@offset_x), safe_i(h), axis_c)
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x; x2 = @offset_x + i * @zoom_x
         next if x2 < SIDEBAR_W || x1 > w
         y1 = @offset_y - @terms[i-1] * @zoom_y; y2 = @offset_y - @terms[i] * @zoom_y
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
+        DrawLine(safe_i(x1), safe_i(y1), safe_i(x2), safe_i(y2), @accent)
       end
     end
 
     # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    draw_text_safe("STATION V1.9.0", 35, 35, 22, @color_black)
+    draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
 
     if @sidebar_tab == :catalog
       BeginScissorMode(0, 100, SIDEBAR_W, h - 160)
@@ -242,13 +262,14 @@ class RaylibExplorer
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     prog = (@terms.size.to_f / @target_terms * 100).to_i
-    draw_text_safe("TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)", w - 450, 30, 20, (@edit_mode ? Raylib::RED : @color_white))
+    draw_text_safe("TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)", w - 450, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
 
     EndDrawing()
   end
 
   def run
-    InitWindow(1600, 950, "v1.9.0-STATION-ATOMIC-SYNC")
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
+    InitWindow(1600, 950, "v1.9.1-RESTORATION-STATION")
     SetTargetFPS(60)
     init_theme()
     until WindowShouldClose(); update(); draw(); end
