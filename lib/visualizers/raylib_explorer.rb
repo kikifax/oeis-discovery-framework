@@ -23,7 +23,7 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.8.3] BOOTING COMPATIBILITY STATION <<<"
+    puts ">>> [v1.8.5] INPUT HERO STATION <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -54,7 +54,7 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark      = safe_color(20, 20, 24)
-    @sidebar_bg   = safe_color(35, 45, 60)
+    @sidebar_bg   = Raylib::GOLD # SYNC TEST v1.8.5
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(150, 150, 170)
@@ -62,14 +62,12 @@ class RaylibExplorer
     @color_black  = safe_color(0, 0, 0)
     @panel_bg     = safe_color(12, 12, 16)
 
-    # Use basic Arial for maximum compatibility
     win_f = "C:\\Windows\\Fonts\\arial.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 64, nil, 0)
       SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR) if @font
     end
     @font ||= GetFontDefault()
-    puts ">>> [v1.8.3] THEME INITIALIZED <<<"
   end
 
   def load_catalog
@@ -93,35 +91,28 @@ class RaylibExplorer
     @target_terms = target_terms || @num_terms
     file = File.join(Dir.pwd, 'sequences', "#{key}.rb")
     return unless File.exist?(file)
-
     begin
       existing = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
       require File.expand_path(file)
       new_c = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
       klass = new_c.find { |c| c.to_s.downcase.include?(key.gsub('_','')) } || (new_c - existing).first
-      
       if klass
         @instance = klass.new
         @terms = [] 
         auto_fit_all(@target_terms)
-        puts "[Station] Synchronized #{key}"
+        puts "[Station] Load Signal: #{key}"
         STDOUT.flush
       end
-    rescue => e
-      puts "Error loading #{key}: #{e.message}"
-    end
+    rescue => e; puts "Error: #{e.message}"; end
   end
 
   def pump_generation
     return unless @instance
     return if @terms.size >= @target_terms
-    
     chunk_size = [(@target_terms * 0.01).to_i, 50].max
     remaining = @target_terms - @terms.size
     chunk_size = remaining if chunk_size > remaining
-
     @terms = @instance.generate(@terms.size + chunk_size)
-    
     if @terms.size % 100 == 0 || @terms.size < 50
        auto_fit_all(@target_terms)
     end
@@ -130,17 +121,14 @@ class RaylibExplorer
   def auto_fit_all(target_count)
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     return if w == 0
-    
     if @terms.any?
       max_v, min_v = @terms.max, @terms.min
     else
       max_v, min_v = 10, -10
     end
-    
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 280.0) / range_y
     @offset_y = 120.0 + (max_v * @zoom_y)
-    
     graph_area_w = w - SIDEBAR_W
     @zoom_x = (graph_area_w - 140.0) / [target_count.to_f, 1.0].max
     @offset_x = (SIDEBAR_W + 70).to_f
@@ -155,15 +143,9 @@ class RaylibExplorer
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
 
-    # DEFERRED INITIAL LOAD
-    if !@initialized_load && @sequences.any?
-       load_sequence(@sequences[0][:key])
-       @initialized_load = true
-    end
-
-    pump_generation()
-
+    # --- PRIORITY INPUT LISTENER ---
     if IsKeyPressed(KEY_T)
+      puts "[DEBUG] T PRESSED"
       @edit_mode = true; @input_text = ""; return
     end
     
@@ -176,14 +158,18 @@ class RaylibExplorer
       @input_text = @input_text[0...-1] if IsKeyPressed(KEY_BACKSPACE) && @input_text.length > 0
       if IsKeyPressed(KEY_ENTER)
         val = @input_text.to_i
-        if val > 10
-          @num_terms = val
-          load_sequence(@sequences[@current_idx][:key], @num_terms)
-        end
+        if val > 10; @num_terms = val; load_sequence(@sequences[@current_idx][:key], @num_terms); end
         @edit_mode = false
       elsif IsKeyPressed(KEY_ESCAPE); @edit_mode = false; end
       return
     end
+
+    # DEFERRED INITIAL LOAD (Only if not typing)
+    if !@initialized_load && @sequences.any?
+       load_sequence(@sequences[0][:key]); @initialized_load = true
+    end
+
+    pump_generation()
 
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       if mx < SIDEBAR_W
@@ -230,7 +216,7 @@ class RaylibExplorer
 
     # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
+    draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_black)
 
     if @sidebar_tab == :catalog
       BeginScissorMode(0, 100, SIDEBAR_W, h - 160)
@@ -240,7 +226,7 @@ class RaylibExplorer
             DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, @color_black)
             draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @color_white)
           else
-            draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @text_dim)
+            draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @color_black)
           end
           list_y += 35
         end
@@ -248,8 +234,8 @@ class RaylibExplorer
     end
 
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
-    draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
-    draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
+    draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @color_black))
+    draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @color_black))
 
     # HEADER
     name = @instance ? @instance.name.upcase : "PREPARING STATION..."
@@ -258,18 +244,16 @@ class RaylibExplorer
     
     prog = (@terms.size.to_f / @target_terms * 100).to_i
     terms_t = "TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)"
-    draw_text_safe(terms_t, w - 450, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
+    draw_text_safe(terms_t, w - 450, 30, 20, (@edit_mode ? Raylib::RED : @color_white))
 
     EndDrawing()
   end
 
   def run
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE) # VISIBILITY FIRST
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE)
     InitWindow(1600, 950, "OEIS COMMAND STATION v#{OEIS::VERSION}")
     SetTargetFPS(60)
     init_theme()
-    
-    # Enter Loop Immediately
     until WindowShouldClose(); update(); draw(); end
     CloseWindow()
   end
