@@ -23,7 +23,7 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.8.0] LIVE PLOTTING ACTIVE <<<"
+    puts ">>> [v1.8.2] ADAPTIVE SCALING ACTIVE <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -53,7 +53,7 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark      = safe_color(20, 20, 24)
-    @sidebar_bg   = safe_color(20, 70, 50) # EMERALD GREEN (v1.8.0)
+    @sidebar_bg   = safe_color(35, 45, 60)
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(150, 150, 170)
@@ -99,31 +99,25 @@ class RaylibExplorer
       
       if klass
         @instance = klass.new
-        # Instant Scale: Prepare the viewport for the target
-        @terms = []
-        auto_fit_all(@target_terms)
-        puts "[v1.8.0] Visual Projection for #{@target_terms} terms active."
+        @terms = [] # Reset for live plot
+        auto_fit_all(@target_terms) # Pre-scale X
       end
     rescue; end
   end
 
-  # LIVE GENERATION: Background or Chunking
   def pump_generation
     return unless @instance
     return if @terms.size >= @target_terms
     
-    # Process 1% of target or at least 100 terms per frame for smooth visual growth
+    # Process batches
     chunk_size = [(@target_terms * 0.01).to_i, 50].max
-    
-    # Don't exceed target
     remaining = @target_terms - @terms.size
     chunk_size = remaining if chunk_size > remaining
 
-    new_batch = @instance.generate(@terms.size + chunk_size)
-    @terms = new_batch
+    @terms = @instance.generate(@terms.size + chunk_size)
     
-    # Re-calculate Y scale if needed based on new extremes
-    if @terms.size % 100 == 0
+    # Only re-scale Y if we hit new extremes or every 100 steps
+    if @terms.size % 100 == 0 || @terms.size < 50
        auto_fit_all(@target_terms)
     end
   end
@@ -132,18 +126,17 @@ class RaylibExplorer
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     return if w == 0
     
-    # For Y, use actual extremes found so far, fallback to reasonable guess
+    # ADAPTIVE SCALING: Use current data or a tight fallback
     if @terms.any?
       max_v, min_v = @terms.max, @terms.min
     else
-      max_v, min_v = 100, -100
+      max_v, min_v = 10, -10 # No more huge spikes
     end
     
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 280.0) / range_y
     @offset_y = 120.0 + (max_v * @zoom_y)
     
-    # For X, scale immediately to the final target width
     graph_area_w = w - SIDEBAR_W
     @zoom_x = (graph_area_w - 140.0) / [target_count.to_f, 1.0].max
     @offset_x = (SIDEBAR_W + 70).to_f
@@ -236,6 +229,7 @@ class RaylibExplorer
 
     # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
+    DrawRectangle(SIDEBAR_W - 1, 0, 1, h, safe_color(255,255,255,20))
     draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
 
     if @sidebar_tab == :catalog
@@ -251,18 +245,28 @@ class RaylibExplorer
           list_y += 35
         end
       EndScissorMode()
+    else
+      panel_y = 120
+      draw_text_safe("REAL-TIME ANALYTICS", 40, panel_y, 16, @accent)
+      if @analysis
+        stats = [
+          "Growth: #{@analysis[:stats][:growth_type]}",
+          "Score: #{@analysis[:fitness_score]}/100"
+        ]
+        stats.each_with_index do |txt, i|
+          draw_text_safe(txt, 40, panel_y + 50 + (i*35), 18, @color_white)
+        end
+      end
     end
 
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
     draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
     draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
 
-    # HEADER
     name = @instance ? @instance.name.upcase : "SELECT"
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     
-    # Progress View
     prog = (@terms.size.to_f / @target_terms * 100).to_i
     terms_t = "TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)"
     draw_text_safe(terms_t, w - 450, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
@@ -271,7 +275,8 @@ class RaylibExplorer
   end
 
   def run
-    InitWindow(1600, 950, "v1.8.0-LIVE-STREAMING")
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI)
+    InitWindow(1600, 950, "v1.8.2-STABLE-SCALING")
     SetTargetFPS(60)
     init_theme()
     load_sequence(@sequences[0][:key]) if @sequences.any?
