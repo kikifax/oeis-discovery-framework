@@ -20,10 +20,12 @@ class RaylibExplorer
   include Raylib
 
   SIDEBAR_W = 420
+  MAX_INT = 2147483647
+  MIN_INT = -2147483648
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.8.5] INPUT HERO STATION <<<"
+    puts ">>> [v1.8.6] INTEGER SAFETY STATION <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -54,7 +56,7 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark      = safe_color(20, 20, 24)
-    @sidebar_bg   = Raylib::GOLD # SYNC TEST v1.8.5
+    @sidebar_bg   = safe_color(35, 45, 60)
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(150, 150, 170)
@@ -100,8 +102,6 @@ class RaylibExplorer
         @instance = klass.new
         @terms = [] 
         auto_fit_all(@target_terms)
-        puts "[Station] Load Signal: #{key}"
-        STDOUT.flush
       end
     rescue => e; puts "Error: #{e.message}"; end
   end
@@ -139,13 +139,16 @@ class RaylibExplorer
     DrawTextEx(@font, text.to_s, @vec_tmp, size.to_f, 0.5, color)
   end
 
+  # CRITICAL: Range-Protected Clamp for DrawLine
+  def safe_i(val)
+    val.clamp(MIN_INT, MAX_INT).to_i
+  end
+
   def update
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
 
-    # --- PRIORITY INPUT LISTENER ---
     if IsKeyPressed(KEY_T)
-      puts "[DEBUG] T PRESSED"
       @edit_mode = true; @input_text = ""; return
     end
     
@@ -164,7 +167,6 @@ class RaylibExplorer
       return
     end
 
-    # DEFERRED INITIAL LOAD (Only if not typing)
     if !@initialized_load && @sequences.any?
        load_sequence(@sequences[0][:key]); @initialized_load = true
     end
@@ -203,20 +205,21 @@ class RaylibExplorer
 
     # GRAPH
     axis_c = safe_color(60,60,75)
-    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, axis_c)
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, axis_c)
+    DrawLine(safe_i(SIDEBAR_W), safe_i(@offset_y), safe_i(w), safe_i(@offset_y), axis_c)
+    DrawLine(safe_i(@offset_x), 0, safe_i(@offset_x), safe_i(h), axis_c)
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x; x2 = @offset_x + i * @zoom_x
         next if x2 < SIDEBAR_W || x1 > w
         y1 = @offset_y - @terms[i-1] * @zoom_y; y2 = @offset_y - @terms[i] * @zoom_y
-        DrawLine(x1.to_i, y1.to_i, x2.to_i, y2.to_i, @accent)
+        # CLAMP COORDINATES TO PREVENT RANGE ERROR
+        DrawLine(safe_i(x1), safe_i(y1), safe_i(x2), safe_i(y2), @accent)
       end
     end
 
     # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_black)
+    draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
 
     if @sidebar_tab == :catalog
       BeginScissorMode(0, 100, SIDEBAR_W, h - 160)
@@ -226,7 +229,7 @@ class RaylibExplorer
             DrawRectangle(25, list_y.to_i - 5, SIDEBAR_W - 50, 35, @color_black)
             draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @color_white)
           else
-            draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @color_black)
+            draw_text_safe(s[:display], 45, list_y.to_i + 4, 18, @text_dim)
           end
           list_y += 35
         end
@@ -234,11 +237,11 @@ class RaylibExplorer
     end
 
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
-    draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @color_black))
-    draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @color_black))
+    draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @color_white))
+    draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @color_white))
 
     # HEADER
-    name = @instance ? @instance.name.upcase : "PREPARING STATION..."
+    name = @instance ? @instance.name.upcase : "PREPARING..."
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     
@@ -251,7 +254,7 @@ class RaylibExplorer
 
   def run
     SetConfigFlags(FLAG_WINDOW_RESIZABLE)
-    InitWindow(1600, 950, "OEIS COMMAND STATION v#{OEIS::VERSION}")
+    InitWindow(1600, 950, "OEIS Station v#{OEIS::VERSION}")
     SetTargetFPS(60)
     init_theme()
     until WindowShouldClose(); update(); draw(); end
