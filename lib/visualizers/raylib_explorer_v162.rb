@@ -23,10 +23,11 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.6.2] INITIALIZING COMPATIBILITY STATION <<<"
+    puts ">>> [v1.8.0] LIVE PLOTTING ACTIVE <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
+    @target_terms = 2000
     @input_text = ""
     @edit_mode = false
     @sidebar_tab = :catalog
@@ -52,7 +53,7 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark      = safe_color(20, 20, 24)
-    @sidebar_bg   = safe_color(20, 30, 60) # NAVY BLUE
+    @sidebar_bg   = safe_color(20, 70, 50) # EMERALD GREEN (v1.8.0)
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(150, 150, 170)
@@ -84,34 +85,67 @@ class RaylibExplorer
     rescue; []; end
   end
 
-  def load_sequence(key)
+  def load_sequence(key, target_terms=nil)
     @current_key = key
+    @target_terms = target_terms || @num_terms
     file = File.join(Dir.pwd, 'sequences', "#{key}.rb")
     return unless File.exist?(file)
+
     begin
       existing = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }.to_a
       require File.expand_path(file)
       new_c = ObjectSpace.each_object(Class).select { |c| c < OEISSequence }
       klass = new_c.find { |c| c.to_s.downcase.include?(key.gsub('_','')) } || (new_c - existing).first
+      
       if klass
         @instance = klass.new
-        @terms = @instance.generate(@num_terms)
-        @analysis = @instance.analyze(@num_terms) if @instance.respond_to?(:analyze)
-        auto_fit_all()
-        puts "[v1.6.2] Loaded: #{key}"
-        STDOUT.flush
+        # Instant Scale: Prepare the viewport for the target
+        @terms = []
+        auto_fit_all(@target_terms)
+        puts "[v1.8.0] Visual Projection for #{@target_terms} terms active."
       end
     rescue; end
   end
 
-  def auto_fit_all
-    return if @terms.empty?
+  # LIVE GENERATION: Background or Chunking
+  def pump_generation
+    return unless @instance
+    return if @terms.size >= @target_terms
+    
+    # Process 1% of target or at least 100 terms per frame for smooth visual growth
+    chunk_size = [(@target_terms * 0.01).to_i, 50].max
+    
+    # Don't exceed target
+    remaining = @target_terms - @terms.size
+    chunk_size = remaining if chunk_size > remaining
+
+    new_batch = @instance.generate(@terms.size + chunk_size)
+    @terms = new_batch
+    
+    # Re-calculate Y scale if needed based on new extremes
+    if @terms.size % 100 == 0
+       auto_fit_all(@target_terms)
+    end
+  end
+
+  def auto_fit_all(target_count)
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
-    max_v, min_v = @terms.max, @terms.min
+    return if w == 0
+    
+    # For Y, use actual extremes found so far, fallback to reasonable guess
+    if @terms.any?
+      max_v, min_v = @terms.max, @terms.min
+    else
+      max_v, min_v = 100, -100
+    end
+    
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 280.0) / range_y
     @offset_y = 120.0 + (max_v * @zoom_y)
-    @zoom_x = (w - SIDEBAR_W - 140.0) / [@terms.size.to_f, 1.0].max
+    
+    # For X, scale immediately to the final target width
+    graph_area_w = w - SIDEBAR_W
+    @zoom_x = (graph_area_w - 140.0) / [target_count.to_f, 1.0].max
     @offset_x = (SIDEBAR_W + 70).to_f
   end
 
@@ -123,6 +157,8 @@ class RaylibExplorer
   def update
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
+
+    pump_generation()
 
     if IsKeyPressed(KEY_T)
       @edit_mode = true; @input_text = ""; return
@@ -136,8 +172,12 @@ class RaylibExplorer
       end
       @input_text = @input_text[0...-1] if IsKeyPressed(KEY_BACKSPACE) && @input_text.length > 0
       if IsKeyPressed(KEY_ENTER)
-        @num_terms = @input_text.to_i if @input_text.to_i > 10
-        load_sequence(@sequences[@current_idx][:key]); @edit_mode = false
+        val = @input_text.to_i
+        if val > 10
+          @num_terms = val
+          load_sequence(@sequences[@current_idx][:key], @num_terms)
+        end
+        @edit_mode = false
       elsif IsKeyPressed(KEY_ESCAPE); @edit_mode = false; end
       return
     end
@@ -173,7 +213,7 @@ class RaylibExplorer
         @zoom_x *= (wheel > 0 ? 1.2 : 0.8)
       end
     end
-    auto_fit_all() if IsKeyPressed(KEY_R)
+    auto_fit_all(@target_terms) if IsKeyPressed(KEY_R)
   end
 
   def draw
@@ -211,37 +251,27 @@ class RaylibExplorer
           list_y += 35
         end
       EndScissorMode()
-    else
-      panel_y = 120
-      draw_text_safe("REAL-TIME ANALYTICS", 40, panel_y, 16, @accent)
-      if @analysis
-        stats = [
-          "Growth: #{@analysis[:stats][:growth_type]}",
-          "Score: #{@analysis[:fitness_score]}/100"
-        ]
-        stats.each_with_index do |txt, i|
-          draw_text_safe(txt, 40, panel_y + 50 + (i*35), 18, @color_white)
-        end
-      end
     end
 
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
     draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
     draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
 
+    # HEADER
     name = @instance ? @instance.name.upcase : "SELECT"
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     
-    terms_t = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
-    draw_text_safe(terms_t, w - 280, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
+    # Progress View
+    prog = (@terms.size.to_f / @target_terms * 100).to_i
+    terms_t = "TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)"
+    draw_text_safe(terms_t, w - 450, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
 
     EndDrawing()
   end
 
   def run
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE) # MINIMAL FLAGS
-    InitWindow(1600, 950, "STATION-V162-VISIBLE")
+    InitWindow(1600, 950, "v1.8.0-LIVE-STREAMING")
     SetTargetFPS(60)
     init_theme()
     load_sequence(@sequences[0][:key]) if @sequences.any?
