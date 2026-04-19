@@ -4,50 +4,42 @@ require_relative '../lib/sequence_template'
 class NaturalStepBouncer < OEISSequence
   def initialize
     super
-    @name = "Natural-Step Bouncer"
-    @description = "a(n) = a(n-1) + dir * n. Mirror at 0. Direction flips if |a(n)|+p_n is prime AND momentum >= sqrt(n). a(0)=0."
+    @name = "Natural-Step Bouncer (Pure)"
+    @description = "a(n) = a(n-1) + dir * n. Direction flips if a(n) is prime. Mirrors at 0. a(0)=1."
     @author = "Andi"
     @rank = "High Potential"
-    @formula = "a(n) = |a(n-1) + dir * n|; flips if (is_prime(|a|+p_n) && streak > sqrt(n))"
+    @formula = "a(n) = |a(n-1) + dir * n|; dir flips if is_prime(a(n))"
     reset_state
   end
 
   def reset_state
-    @current_a = 0
+    @current_a = 1 # Starting at 1 breaks the n(n+1)/2 composite trap
     @n = 0
     @direction = 1
-    @streak = 0
   end
 
   def compute_next
     @n += 1
-    @streak += 1
     
-    # 1. Standard move
+    # 1. Standard Pure Move
     next_v = @current_a + (@direction * @n)
     
-    # 2. Mirror at zero
+    # 2. Mirror (Stay positive)
     @current_a = next_v.abs
     if next_v <= 0
       @direction = 1
-      @streak = 0
     end
     
-    # 3. Momentum Flip
-    # We only allow a flip if we've been in this direction long enough to 'build speed'
-    p_n = self.class.get_prime(@n)
-    if (@current_a + p_n).prime?
-      if @streak >= Math.sqrt(@n).floor
-        @direction *= -1
-        @streak = 0
-      end
+    # 3. Pure Prime Flip
+    if @current_a > 1 && @current_a.prime?
+      @direction *= -1
     end
     
     @current_a
   end
   
   def generate(count)
-    puts "[Station] Recalculating NSB with Momentum Logic..."
+    puts "[Station] Calculating PURE Natural Step Bouncer..."
     super(count)
   end
 end

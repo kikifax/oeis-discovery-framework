@@ -25,7 +25,7 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.8.6] INTEGER SAFETY STATION <<<"
+    puts ">>> [v1.8.7] PURE MATH STATION <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -55,18 +55,18 @@ class RaylibExplorer
   end
 
   def init_theme
-    @bg_dark      = safe_color(20, 20, 24)
-    @sidebar_bg   = safe_color(35, 45, 60)
-    @accent       = safe_color(0, 180, 255)
-    @text_main    = safe_color(240, 240, 250)
-    @text_dim     = safe_color(150, 150, 170)
-    @color_white  = safe_color(255, 255, 255)
-    @color_black  = safe_color(0, 0, 0)
+    @bg_dark    = safe_color(20, 20, 24)
+    @sidebar_bg = safe_color(35, 45, 60)
+    @accent     = safe_color(0, 180, 255)
+    @text_main  = safe_color(240, 240, 250)
+    @text_dim   = safe_color(150, 150, 170)
+    @color_white = safe_color(255, 255, 255)
+    @color_black = safe_color(0, 0, 0)
     @panel_bg     = safe_color(12, 12, 16)
 
-    win_f = "C:\\Windows\\Fonts\\arial.ttf"
+    win_f = "C:\\Windows\\Fonts\\segoeui.ttf"
     if File.exist?(win_f)
-      @font = LoadFontEx(win_f, 64, nil, 0)
+      @font = LoadFontEx(win_f, 96, nil, 0)
       SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR) if @font
     end
     @font ||= GetFontDefault()
@@ -103,19 +103,22 @@ class RaylibExplorer
         @terms = [] 
         auto_fit_all(@target_terms)
       end
-    rescue => e; puts "Error: #{e.message}"; end
+    rescue; end
   end
 
   def pump_generation
     return unless @instance
     return if @terms.size >= @target_terms
-    chunk_size = [(@target_terms * 0.01).to_i, 50].max
+    
+    # Process small chunks for extreme visual feedback
+    chunk_size = [(@target_terms * 0.01).to_i, 10].max
     remaining = @target_terms - @terms.size
     chunk_size = remaining if chunk_size > remaining
+
     @terms = @instance.generate(@terms.size + chunk_size)
-    if @terms.size % 100 == 0 || @terms.size < 50
-       auto_fit_all(@target_terms)
-    end
+    
+    # RE-FIT EVERY FRAME while generating to prevent overflow
+    auto_fit_all(@target_terms)
   end
 
   def auto_fit_all(target_count)
@@ -124,7 +127,7 @@ class RaylibExplorer
     if @terms.any?
       max_v, min_v = @terms.max, @terms.min
     else
-      max_v, min_v = 10, -10
+      max_v, min_v = 1, -1
     end
     range_y = [(max_v - min_v).abs, 1.0].max
     @zoom_y = (h - 280.0) / range_y
@@ -134,14 +137,13 @@ class RaylibExplorer
     @offset_x = (SIDEBAR_W + 70).to_f
   end
 
+  def safe_i(val)
+    val.clamp(MIN_INT, MAX_INT).to_i
+  end
+
   def draw_text_safe(text, x, y, size, color)
     @vec_tmp[:x], @vec_tmp[:y] = x.to_f, y.to_f
     DrawTextEx(@font, text.to_s, @vec_tmp, size.to_f, 0.5, color)
-  end
-
-  # CRITICAL: Range-Protected Clamp for DrawLine
-  def safe_i(val)
-    val.clamp(MIN_INT, MAX_INT).to_i
   end
 
   def update
@@ -160,9 +162,8 @@ class RaylibExplorer
       end
       @input_text = @input_text[0...-1] if IsKeyPressed(KEY_BACKSPACE) && @input_text.length > 0
       if IsKeyPressed(KEY_ENTER)
-        val = @input_text.to_i
-        if val > 10; @num_terms = val; load_sequence(@sequences[@current_idx][:key], @num_terms); end
-        @edit_mode = false
+        @num_terms = @input_text.to_i if @input_text.to_i > 5
+        load_sequence(@sequences[@current_idx][:key], @num_terms); @edit_mode = false
       elsif IsKeyPressed(KEY_ESCAPE); @edit_mode = false; end
       return
     end
@@ -203,21 +204,19 @@ class RaylibExplorer
     ClearBackground(@bg_dark)
     w, h = GetScreenWidth(), GetScreenHeight()
 
-    # GRAPH
     axis_c = safe_color(60,60,75)
     DrawLine(safe_i(SIDEBAR_W), safe_i(@offset_y), safe_i(w), safe_i(@offset_y), axis_c)
     DrawLine(safe_i(@offset_x), 0, safe_i(@offset_x), safe_i(h), axis_c)
+    
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x; x2 = @offset_x + i * @zoom_x
         next if x2 < SIDEBAR_W || x1 > w
         y1 = @offset_y - @terms[i-1] * @zoom_y; y2 = @offset_y - @terms[i] * @zoom_y
-        # CLAMP COORDINATES TO PREVENT RANGE ERROR
         DrawLine(safe_i(x1), safe_i(y1), safe_i(x2), safe_i(y2), @accent)
       end
     end
 
-    # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
     draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
 
@@ -240,14 +239,11 @@ class RaylibExplorer
     draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @color_white))
     draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @color_white))
 
-    # HEADER
     name = @instance ? @instance.name.upcase : "PREPARING..."
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
-    
     prog = (@terms.size.to_f / @target_terms * 100).to_i
-    terms_t = "TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)"
-    draw_text_safe(terms_t, w - 450, 30, 20, (@edit_mode ? Raylib::RED : @color_white))
+    draw_text_safe("TERMS: #{@terms.size} / #{@target_terms} (#{prog}%)", w - 450, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
 
     EndDrawing()
   end
