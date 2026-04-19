@@ -65,8 +65,8 @@ command = ARGV[0]
 case command
 when "explore"
   build_catalog(sequences)
-  # POINT TO V162
-  viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_explorer_v162.rb")
+  # Standardized stable filename
+  viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_explorer.rb")
   puts "\n🚀 Launching Obsidian Explorer v#{OEIS::VERSION}..."
   system("bundle exec ruby \"#{viewer_path}\"")
 else
