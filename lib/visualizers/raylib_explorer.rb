@@ -23,7 +23,7 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> [v1.8.2] ADAPTIVE SCALING ACTIVE <<<"
+    puts ">>> [v1.8.3] BOOTING COMPATIBILITY STATION <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
@@ -34,6 +34,7 @@ class RaylibExplorer
     @scroll_offset = 0.0
     @dragging = false
     @terms = []
+    @initialized_load = false
     
     @offset_x = (SIDEBAR_W + 80).to_f
     @offset_y = 450.0
@@ -61,12 +62,14 @@ class RaylibExplorer
     @color_black  = safe_color(0, 0, 0)
     @panel_bg     = safe_color(12, 12, 16)
 
-    win_f = "C:\\Windows\\Fonts\\segoeui.ttf"
+    # Use basic Arial for maximum compatibility
+    win_f = "C:\\Windows\\Fonts\\arial.ttf"
     if File.exist?(win_f)
-      @font = LoadFontEx(win_f, 96, nil, 0)
+      @font = LoadFontEx(win_f, 64, nil, 0)
       SetTextureFilter(@font.texture, TEXTURE_FILTER_BILINEAR) if @font
     end
     @font ||= GetFontDefault()
+    puts ">>> [v1.8.3] THEME INITIALIZED <<<"
   end
 
   def load_catalog
@@ -99,24 +102,26 @@ class RaylibExplorer
       
       if klass
         @instance = klass.new
-        @terms = [] # Reset for live plot
-        auto_fit_all(@target_terms) # Pre-scale X
+        @terms = [] 
+        auto_fit_all(@target_terms)
+        puts "[Station] Synchronized #{key}"
+        STDOUT.flush
       end
-    rescue; end
+    rescue => e
+      puts "Error loading #{key}: #{e.message}"
+    end
   end
 
   def pump_generation
     return unless @instance
     return if @terms.size >= @target_terms
     
-    # Process batches
     chunk_size = [(@target_terms * 0.01).to_i, 50].max
     remaining = @target_terms - @terms.size
     chunk_size = remaining if chunk_size > remaining
 
     @terms = @instance.generate(@terms.size + chunk_size)
     
-    # Only re-scale Y if we hit new extremes or every 100 steps
     if @terms.size % 100 == 0 || @terms.size < 50
        auto_fit_all(@target_terms)
     end
@@ -126,11 +131,10 @@ class RaylibExplorer
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     return if w == 0
     
-    # ADAPTIVE SCALING: Use current data or a tight fallback
     if @terms.any?
       max_v, min_v = @terms.max, @terms.min
     else
-      max_v, min_v = 10, -10 # No more huge spikes
+      max_v, min_v = 10, -10
     end
     
     range_y = [(max_v - min_v).abs, 1.0].max
@@ -150,6 +154,12 @@ class RaylibExplorer
   def update
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
+
+    # DEFERRED INITIAL LOAD
+    if !@initialized_load && @sequences.any?
+       load_sequence(@sequences[0][:key])
+       @initialized_load = true
+    end
 
     pump_generation()
 
@@ -196,16 +206,7 @@ class RaylibExplorer
     elsif IsMouseButtonReleased(MOUSE_BUTTON_LEFT); @dragging = false; end
 
     if @dragging; @offset_x += (mx.to_f - @last_mx); @last_mx = mx.to_f; end
-
-    wheel = GetMouseWheelMove()
-    if wheel != 0
-      if mx < SIDEBAR_W
-        @scroll_offset += wheel * 60
-        @scroll_offset = [[@scroll_offset, 0.0].min, -(@sequences.size * 35 - 400)].max
-      else
-        @zoom_x *= (wheel > 0 ? 1.2 : 0.8)
-      end
-    end
+    @zoom_x *= (GetMouseWheelMove() > 0 ? 1.2 : 0.8) if GetMouseWheelMove() != 0
     auto_fit_all(@target_terms) if IsKeyPressed(KEY_R)
   end
 
@@ -229,7 +230,6 @@ class RaylibExplorer
 
     # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
-    DrawRectangle(SIDEBAR_W - 1, 0, 1, h, safe_color(255,255,255,20))
     draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
 
     if @sidebar_tab == :catalog
@@ -245,25 +245,14 @@ class RaylibExplorer
           list_y += 35
         end
       EndScissorMode()
-    else
-      panel_y = 120
-      draw_text_safe("REAL-TIME ANALYTICS", 40, panel_y, 16, @accent)
-      if @analysis
-        stats = [
-          "Growth: #{@analysis[:stats][:growth_type]}",
-          "Score: #{@analysis[:fitness_score]}/100"
-        ]
-        stats.each_with_index do |txt, i|
-          draw_text_safe(txt, 40, panel_y + 50 + (i*35), 18, @color_white)
-        end
-      end
     end
 
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
     draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
     draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
 
-    name = @instance ? @instance.name.upcase : "SELECT"
+    # HEADER
+    name = @instance ? @instance.name.upcase : "PREPARING STATION..."
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     
@@ -275,11 +264,12 @@ class RaylibExplorer
   end
 
   def run
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI)
-    InitWindow(1600, 950, "v1.8.2-STABLE-SCALING")
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE) # VISIBILITY FIRST
+    InitWindow(1600, 950, "OEIS COMMAND STATION v#{OEIS::VERSION}")
     SetTargetFPS(60)
     init_theme()
-    load_sequence(@sequences[0][:key]) if @sequences.any?
+    
+    # Enter Loop Immediately
     until WindowShouldClose(); update(); draw(); end
     CloseWindow()
   end
