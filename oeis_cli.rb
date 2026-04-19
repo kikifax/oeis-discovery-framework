@@ -6,7 +6,7 @@ require_relative 'lib/version'
 require_relative 'lib/sequence_template'
 
 $stdout.sync = true
-puts "OEIS Discovery Framework v#{OEIS::VERSION} !!! VISIBILITY V162 !!!"
+puts "OEIS Discovery Framework v#{OEIS::VERSION}"
 
 def load_sequences
   sequences = {}
@@ -63,12 +63,23 @@ end.parse!
 command = ARGV[0]
 
 case command
+when "list"
+  sequences.each { |k, _| puts k }
+when "build-catalog"
+  build_catalog(sequences, force: true)
 when "explore"
   build_catalog(sequences)
-  # Standardized stable filename
   viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_explorer.rb")
-  puts "\n🚀 Launching Obsidian Explorer v#{OEIS::VERSION}..."
+  puts "\n🚀 Launching Obsidian Explorer..."
   system("bundle exec ruby \"#{viewer_path}\"")
+when "analyze"
+  key = ARGV[1]
+  count = (ARGV[2] || 100).to_i
+  if sequences[key]
+    klass = load_sequence_class(sequences[key])
+    instance = klass.new
+    puts "Terms: #{instance.generate(count).inspect}"
+  end
 else
   puts "Usage: bundle exec ruby oeis_cli.rb explore"
 end

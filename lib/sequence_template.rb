@@ -3,7 +3,7 @@ require 'fileutils'
 require_relative 'version'
 
 class OEISSequence
-  attr_reader :name, :description, :author, :rank, :formula, :oeis_id, :terms
+  attr_reader :name, :description, :author, :rank, :formula, :terms
 
   PRIME_CACHE = []
   PRIME_GEN = Prime.each
@@ -17,12 +17,13 @@ class OEISSequence
   end
 
   def initialize
-    @name = "Unnamed Sequence"
-    @description = "No description."
-    @author = "Anonymous"
+    @name = "Unnamed"
+    @description = ""
+    @author = "Andi"
     @rank = "Experimental"
     @formula = ""
     @terms = []
+    reset_state
   end
 
   def cache_path
@@ -30,54 +31,43 @@ class OEISSequence
     File.join('.cache', "#{self.class.to_s.downcase}.cache")
   end
 
-  # HIGH PERFORMANCE BINARY STREAMING (v1.7.0)
-  # [4 bytes: JSON Length] [N bytes: JSON State] [M bytes: Binary Terms (q*)]
+  # SIMPLE BINARY FORMAT (v1.8.8)
+  # [Raw 64-bit Binary Terms (q*)]
   def save_cache
-    state = {}
-    instance_variables.each do |var|
-      next if [:@terms, :@prime_gen].include?(var)
-      state[var] = instance_variable_get(var)
-    end
-    json_blob = state.to_json
-    
-    File.open(cache_path, 'wb') do |f|
-      f.write([json_blob.bytesize].pack('L')) # 4-byte header
-      f.write(json_blob)
-      f.write(@terms.pack('q*')) # raw 64-bit binary
-    end
+    File.open(cache_path, 'wb') { |f| f.write(@terms.pack('q*')) }
   end
 
-  def load_cache(requested_count=nil)
+  def load_cache(count=nil)
     path = cache_path
     return reset_state unless File.exist?(path)
     
     begin
-      File.open(path, 'rb') do |f|
-        header = f.read(4)
-        return reset_state unless header
-        json_size = header.unpack1('L')
-        
-        # 1. Restore State
-        state = JSON.parse(f.read(json_size))
-        state.each { |k, v| instance_variable_set(k, v) }
-        
-        # 2. Selective Term Loading (Streaming)
-        # Each 'q' term is 8 bytes.
-        available_bytes = f.size - f.pos
-        available_terms = available_bytes / 8
-        
-        # If we asked for 2k terms but file has 100k, only read what's needed
-        to_read = requested_count ? [requested_count, available_terms].min : available_terms
-        @terms = f.read(to_read * 8).unpack('q*')
-      end
+      raw = File.read(path)
+      return reset_state if raw.empty?
+      
+      all_terms = raw.unpack('q*')
+      # We must reconstruct the state by 'replaying' or setting counters
+      @terms = count ? all_terms.first(count) : all_terms
+      
+      # Reconstruct state variables based on how many terms we loaded
+      reconstruct_state(@terms)
     rescue
       reset_state
     end
   end
 
+  def reconstruct_state(terms)
+    reset_state
+    # Subclasses can override this, but standard is to just set current value to last term
+    if terms.any?
+      @current_a = terms.last
+      @n = terms.size
+    end
+  end
+
   def generate(count)
     @terms ||= []
-    load_cache(count) if @terms.empty?
+    load_cache if @terms.empty?
     
     if @terms.size < count
       needed = count - @terms.size
@@ -90,13 +80,11 @@ class OEISSequence
   def analyze(count)
     t = generate(count)
     return {fitness_score: 0} if t.empty?
-    
-    diffs = t.each_cons(2).map { |a, b| (a - b).abs }
     unique_ratio = t.uniq.size.to_f / t.size
-    entropy = (diffs.sum.to_f / [t.max, 1].max) * 10
-    
-    # Simple Modern Heuristic
-    score = (unique_ratio * 40) + [entropy, 40].min + 20
-    { fitness_score: score.round(1), stats: { growth_type: "Chaotic" }, scoring: { activity: 20, novelty: 20, diversity: 20 } }
+    { 
+      fitness_score: (unique_ratio * 100).round(1), 
+      stats: { growth_type: "Oscillating" },
+      scoring: { activity: 25, novelty: 25, diversity: 25 }
+    }
   end
 end
