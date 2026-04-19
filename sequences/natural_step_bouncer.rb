@@ -5,10 +5,10 @@ class NaturalStepBouncer < OEISSequence
   def initialize
     super
     @name = "Natural-Step Bouncer"
-    @description = "a(n) = a(n-1) + dir * n. If result <= 0, it mirrors (abs value) and dir=UP. If result is prime, dir flips. a(0)=0."
+    @description = "a(n) = a(n-1) + dir * n. Result mirrored at 0. Direction flips if |a(n)| + p_n is prime. a(0)=0."
     @author = "Andi"
     @rank = "High Potential"
-    @formula = "a(n) = |a(n-1) + dir * n|; dir resets to 1 if hit zero, else flips if prime"
+    @formula = "a(n) = |a(n-1) + dir * n|; dir = -dir if is_prime(|a(n)| + p_n)"
     reset_state
   end
 
@@ -21,27 +21,27 @@ class NaturalStepBouncer < OEISSequence
   def compute_next
     @n += 1
     
-    # 1. Potential move
+    # 1. Standard move
     next_v = @current_a + (@direction * @n)
     
-    # 2. Check boundary (Mirror at zero)
+    # 2. Mirror (Stay positive)
+    @current_a = next_v.abs
     if next_v <= 0
-      @current_a = next_v.abs
-      @direction = 1 # Always bounce back UP
-    else
-      @current_a = next_v
-      # 3. Check Prime Wall
-      if @current_a > 1 && @current_a.prime?
-        @direction *= -1
-      end
+      @direction = 1
+    end
+    
+    # 3. Breaking the Triangular Trap
+    # Use the n-th prime as an offset so we don't land in the n(n+1)/2 sieve
+    p_n = self.class.get_prime(@n)
+    if (@current_a + p_n).prime?
+      @direction *= -1
     end
     
     @current_a
   end
   
-  # Force recalculation for the new Mirror logic
   def generate(count)
-    puts "[Station] Calculating MIRRORED Natural Step Bouncer..."
+    puts "[Station] Recalculating: Breaking the Triangular Trap..."
     super(count)
   end
 end

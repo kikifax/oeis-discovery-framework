@@ -6,7 +6,7 @@ require_relative 'lib/version'
 require_relative 'lib/sequence_template'
 
 $stdout.sync = true
-puts "OEIS Discovery Framework v#{OEIS::VERSION}"
+puts "OEIS Discovery Framework v#{OEIS::VERSION} !!! VISIBILITY V162 !!!"
 
 def load_sequences
   sequences = {}
@@ -29,49 +29,28 @@ end
 def build_catalog(sequences, force: false)
   cache_path = '.cache/catalog.json'
   FileUtils.mkdir_p('.cache')
-  
-  # Load existing data to preserve scores for unchanged files
   existing_catalog = File.exist?(cache_path) ? (JSON.parse(File.read(cache_path)) rescue []) : []
   catalog_map = existing_catalog.each_with_object({}) { |s, h| h[s['key']] = s }
-  
   cache_time = File.exist?(cache_path) ? File.mtime(cache_path) : Time.at(0)
   catalog_data = []
-  updated_count = 0
-
+  updated = 0
   sequences.sort.each do |key, file|
     cached = catalog_map[key]
-    file_time = File.mtime(file)
-
-    # DIFF SYNC: Only analyze if file is newer than cache OR missing from cache
-    if !force && cached && file_time <= cache_time
+    if !force && cached && File.mtime(file) <= cache_time
       catalog_data << cached
     else
-      puts "Refreshing: #{key}..."
       begin
         klass = load_sequence_class(file)
         if klass
           instance = klass.new
           report = instance.analyze(1000)
-          catalog_data << {
-            key: key,
-            name: instance.name,
-            rank: instance.rank,
-            formula: instance.formula,
-            fitness_score: report[:fitness_score]
-          }
-          updated_count += 1
+          catalog_data << { key: key, name: instance.name, rank: instance.rank, formula: instance.formula, fitness_score: report[:fitness_score] }
+          updated += 1
         end
-      rescue => e
-        puts "Error on #{key}: #{e.message}"
-        catalog_data << cached if cached # Fallback to old data on error
-      end
+      rescue; end
     end
   end
-
-  if updated_count > 0 || !File.exist?(cache_path)
-    File.write(cache_path, catalog_data.to_json)
-    puts "[Sync] Updated #{updated_count} sequences in catalog."
-  end
+  File.write(cache_path, catalog_data.to_json) if updated > 0 || !File.exist?(cache_path)
 end
 
 sequences = load_sequences
@@ -86,11 +65,10 @@ command = ARGV[0]
 case command
 when "explore"
   build_catalog(sequences)
-  viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_viewer.rb")
-  puts "\n🚀 Launching Explorer Station..."
+  # POINT TO V162
+  viewer_path = File.join(__dir__, "lib", "visualizers", "raylib_explorer_v162.rb")
+  puts "\n🚀 Launching Obsidian Explorer v#{OEIS::VERSION}..."
   system("bundle exec ruby \"#{viewer_path}\"")
-when "build-catalog"
-  build_catalog(sequences, force: true)
 else
   puts "Usage: bundle exec ruby oeis_cli.rb explore"
 end

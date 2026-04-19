@@ -23,29 +23,25 @@ class RaylibExplorer
 
   def initialize
     $stdout.sync = true
-    puts ">>> STATION MILESTONE v1.6.0 [UX] <<<"
+    puts ">>> [v1.6.1] LAUNCHING CACHE-BREAKER STATION <<<"
     @sequences = load_catalog
     @current_idx = 0
     @num_terms = 2000
     @input_text = ""
     @edit_mode = false
-    @sidebar_tab = :catalog # :catalog or :analytics
+    @sidebar_tab = :catalog
     @scroll_offset = 0.0
     @dragging = false
     @terms = []
     
-    # Viewport
     @offset_x = (SIDEBAR_W + 80).to_f
     @offset_y = 450.0
     @zoom_x = 1.0
     @zoom_y = 1.0
     
-    # Pre-allocate FFI Structs (NEVER re-allocate in draw loop)
     @vec_tmp = Raylib::Vector2.new
     @header_pos = Raylib::Vector2.new
     @header_pos[:y] = 25.0
-    
-    $stdout.sync = true
   end
 
   def safe_color(r, g, b, a=255)
@@ -56,17 +52,14 @@ class RaylibExplorer
 
   def init_theme
     @bg_dark      = safe_color(18, 18, 22)
-    @sidebar_bg   = safe_color(35, 45, 60) # SLATE BLUE (SYNC TEST)
+    @sidebar_bg   = safe_color(35, 45, 60) # SLATE BLUE (SYNC PROOF)
     @accent       = safe_color(0, 180, 255)
     @text_main    = safe_color(240, 240, 250)
     @text_dim     = safe_color(140, 150, 170)
     @color_white  = safe_color(255, 255, 255)
     @color_black  = safe_color(0, 0, 0)
-    @color_red    = safe_color(255, 60, 60)
     @panel_bg     = safe_color(12, 12, 16)
-    @hover_bg     = safe_color(255, 255, 255, 30)
 
-    # Load System Font
     win_f = "C:\\Windows\\Fonts\\segoeui.ttf"
     if File.exist?(win_f)
       @font = LoadFontEx(win_f, 96, nil, 0)
@@ -105,7 +98,7 @@ class RaylibExplorer
         @terms = @instance.generate(@num_terms)
         @analysis = @instance.analyze(@num_terms) if @instance.respond_to?(:analyze)
         auto_fit_all()
-        puts "[Station] Loaded: #{key}"
+        puts "[v1.6.1] Loaded: #{key}"
         STDOUT.flush
       end
     rescue; end
@@ -131,7 +124,6 @@ class RaylibExplorer
     w, h = GetScreenWidth().to_f, GetScreenHeight().to_f
     mx, my = GetMouseX(), GetMouseY()
 
-    # 1. KEYBOARD INPUTS
     if IsKeyPressed(KEY_T)
       @edit_mode = true; @input_text = ""; return
     end
@@ -150,10 +142,8 @@ class RaylibExplorer
       return
     end
 
-    # 2. MOUSE INTERACTIONS
     if IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
       if mx < SIDEBAR_W
-        # Sidebar Tabs
         if my > h - 60
           @sidebar_tab = (mx < SIDEBAR_W/2) ? :catalog : :analytics
         elsif @sidebar_tab == :catalog
@@ -165,7 +155,7 @@ class RaylibExplorer
             list_y += 35
           end
         end
-      elsif mx > w - 300 && my < 80 # Header click
+      elsif mx > w - 300 && my < 80
         @edit_mode = true; @input_text = ""
       else
         @dragging = true; @last_mx = mx.to_f
@@ -174,7 +164,6 @@ class RaylibExplorer
 
     if @dragging; @offset_x += (mx.to_f - @last_mx); @last_mx = mx.to_f; end
 
-    # 3. SCROLLING
     wheel = GetMouseWheelMove()
     if wheel != 0
       if mx < SIDEBAR_W
@@ -184,7 +173,6 @@ class RaylibExplorer
         @zoom_x *= (wheel > 0 ? 1.2 : 0.8)
       end
     end
-    
     auto_fit_all() if IsKeyPressed(KEY_R)
   end
 
@@ -193,9 +181,10 @@ class RaylibExplorer
     ClearBackground(@bg_dark)
     w, h = GetScreenWidth(), GetScreenHeight()
 
-    # --- GRAPH LAYER ---
-    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, safe_color(60,60,75))
-    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, safe_color(60,60,75))
+    # GRAPH
+    axis_c = safe_color(60,60,75)
+    DrawLine(SIDEBAR_W, @offset_y.to_i, w, @offset_y.to_i, axis_c)
+    DrawLine(@offset_x.to_i, 0, @offset_x.to_i, h, axis_c)
     if @terms && @terms.size > 1
       (1...@terms.size).each do |i|
         x1 = @offset_x + (i - 1) * @zoom_x; x2 = @offset_x + i * @zoom_x
@@ -205,14 +194,12 @@ class RaylibExplorer
       end
     end
 
-    # --- SIDEBAR LAYER ---
+    # SIDEBAR
     DrawRectangle(0, 0, SIDEBAR_W, h, @sidebar_bg)
     DrawRectangle(SIDEBAR_W - 1, 0, 1, h, safe_color(255,255,255,20))
-    
     draw_text_safe("COMMAND CENTER", 35, 35, 22, @color_white)
     DrawRectangle(35, 68, 80, 4, @accent)
 
-    # Tab Content
     if @sidebar_tab == :catalog
       BeginScissorMode(0, 100, SIDEBAR_W, h - 160)
         list_y = 110.0 + @scroll_offset
@@ -227,9 +214,8 @@ class RaylibExplorer
         end
       EndScissorMode()
     else
-      # Analytics Tab
       panel_y = 120
-      DrawTextEx(@font, "REAL-TIME STATS", Vector2.new(40, panel_y), 16.0, 1.0, @accent)
+      draw_text_safe("REAL-TIME ANALYTICS", 40, panel_y, 16, @accent)
       if @analysis
         stats = [
           "Growth: #{@analysis[:stats][:growth_type]}",
@@ -239,34 +225,28 @@ class RaylibExplorer
           "Score: #{@analysis[:fitness_score]}/100"
         ]
         stats.each_with_index do |txt, i|
-          draw_text_safe(txt, 40, panel_y + 40 + (i*30), 16, @color_white)
+          draw_text_safe(txt, 40, panel_y + 50 + (i*35), 18, @color_white)
         end
       end
     end
 
-    # Tab Buttons
     DrawRectangle(0, h - 60, SIDEBAR_W, 60, @panel_bg)
-    DrawText("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
-    DrawText("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
+    draw_text_safe("CATALOG", 45, h - 35, 18, (@sidebar_tab == :catalog ? @accent : @text_dim))
+    draw_text_safe("ANALYTICS", SIDEBAR_W/2 + 30, h - 35, 18, (@sidebar_tab == :analytics ? @accent : @text_dim))
 
-    # --- HEADER ---
     name = @instance ? @instance.name.upcase : "SELECT"
     @header_pos[:x] = (SIDEBAR_W + 40).to_f
     DrawTextEx(@font, name, @header_pos, 28.0, 1.0, @color_white)
     
     terms_t = "TERMS: #{@edit_mode ? @input_text + '_' : @num_terms}"
-    draw_text_safe(terms_t, w - 280, 30, 20, @edit_mode ? @color_red : @color_white)
-
-    # --- STATUS BAR ---
-    DrawRectangle(SIDEBAR_W, h - 30, w - SIDEBAR_W, 30, @bg_dark)
-    draw_text_safe("FPS: #{GetFPS()} | ENGINE: ACTIVE | ZOOM: #{@zoom_x.round(2)}", SIDEBAR_W + 40, h - 22, 12, @text_dim)
+    draw_text_safe(terms_t, w - 280, 30, 20, (@edit_mode ? safe_color(255,100,100) : @color_white))
 
     EndDrawing()
   end
 
   def run
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI)
-    InitWindow(1600, 950, "OEIS COMMAND STATION v#{OEIS::VERSION}")
+    InitWindow(1600, 950, "v1.6.1-STATION-SYNC-PROOF")
     SetTargetFPS(60)
     init_theme()
     load_sequence(@sequences[0][:key]) if @sequences.any?
